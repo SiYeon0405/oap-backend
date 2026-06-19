@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
-from app.schemas.analysis_report import AnalysisStartResponse
+from app.schemas.analysis_report import AnalysisReportResponse, AnalysisStartResponse
 
 
 class AnalysisReportService:
@@ -40,6 +40,31 @@ class AnalysisReportService:
             return AnalysisStartResponse(
                 requestId=updated_request.id,
                 status=updated_request.status,
+            )
+
+    def get_report(self, request_id: int) -> AnalysisReportResponse:
+        with get_session() as session:
+            analysis_request = self.repository.find_analysis_request(session, request_id)
+            if analysis_request is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="analysis request not found",
+                )
+
+            report = self.repository.find_report(session, request_id)
+            if report is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="analysis report not found",
+                )
+
+            return AnalysisReportResponse(
+                serviceSummary=report.service_summary,
+                marketAnalysis=report.market_analysis,
+                competitorAnalysis=report.competitor_analysis,
+                targetCustomerAnalysis=report.target_customer_analysis,
+                marketingStrategy=report.marketing_strategy,
+                platformRecommendation=report.platform_recommendation,
             )
 
     def _build_pending_report_payload(self) -> dict[str, dict[str, str]]:
