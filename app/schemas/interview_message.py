@@ -1,6 +1,14 @@
 from pydantic import BaseModel
 
 
+class InterviewAnswerRequest(BaseModel):
+    answer: str
+
+
+class InterviewAnswerResponse(BaseModel):
+    nextQuestion: str
+
+
 class InterviewMessageResponse(BaseModel):
     role: str
     content: str
