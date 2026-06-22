@@ -21,12 +21,23 @@ class AnalysisReportService:
 
             existing_report = self.repository.find_report(session, request_id)
             if existing_report is not None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="analysis report already exists",
+                updated_request = self.repository.complete_analysis(
+                    session,
+                    analysis_request,
+                )
+                return AnalysisStartResponse(
+                    requestId=updated_request.id,
+                    status=updated_request.status,
                 )
 
-            report_payload = self._build_pending_report_payload()
+            if analysis_request.status != "INTERVIEWING":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="analysis request is not interviewing",
+                )
+
+            messages = self.repository.find_messages(session, request_id)
+            report_payload = self._build_report_payload(analysis_request, messages)
             analysis_report = AnalysisReport(
                 analysis_request_id=request_id,
                 **report_payload,
@@ -67,13 +78,39 @@ class AnalysisReportService:
                 platformRecommendation=report.platform_recommendation,
             )
 
-    def _build_pending_report_payload(self) -> dict[str, dict[str, str]]:
-        # TODO: Replace with AI analysis result
+    def _build_report_payload(self, analysis_request, messages) -> dict[str, dict]:
+        user_answers = [
+            message.content.strip()
+            for message in messages
+            if message.role == "USER" and message.content.strip()
+        ]
+        interview_summary = " ".join(user_answers) or "No user answers provided."
+
         return {
-            "service_summary": {"status": "pending"},
-            "market_analysis": {"status": "pending"},
-            "competitor_analysis": {"status": "pending"},
-            "target_customer_analysis": {"status": "pending"},
-            "marketing_strategy": {"status": "pending"},
-            "platform_recommendation": {"status": "pending"},
+            "service_summary": {
+                "serviceName": analysis_request.service_name,
+                "description": analysis_request.one_line_description,
+                "industry": analysis_request.industry,
+                "interviewSummary": interview_summary,
+            },
+            "market_analysis": {
+                "industry": analysis_request.industry,
+                "basis": user_answers[:2],
+            },
+            "competitor_analysis": {
+                "strategy": "Compare direct alternatives mentioned in the interview.",
+                "basis": user_answers,
+            },
+            "target_customer_analysis": {
+                "strategy": "Prioritize the customer segment and pain points from the interview.",
+                "basis": user_answers[:3],
+            },
+            "marketing_strategy": {
+                "strategy": "Validate demand through the channels mentioned in the interview.",
+                "basis": user_answers,
+            },
+            "platform_recommendation": {
+                "strategy": "Start with the smallest platform that supports the described core feature.",
+                "mainQuestion": analysis_request.main_question,
+            },
         }
