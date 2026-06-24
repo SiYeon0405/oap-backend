@@ -6,7 +6,9 @@ class InterviewAnswerRequest(BaseModel):
 
 
 class InterviewAnswerResponse(BaseModel):
-    nextQuestion: str
+    nextQuestion: str | None
+    status: str
+    interviewCompleted: bool
 
 
 class InterviewMessageResponse(BaseModel):

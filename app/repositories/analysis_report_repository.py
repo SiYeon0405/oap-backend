@@ -42,6 +42,7 @@ class AnalysisReportRepository:
         analysis_request: AnalysisRequest,
     ) -> AnalysisRequest:
         analysis_request.status = "COMPLETED"
+        analysis_request.interview_completed = True
         session.commit()
         session.refresh(analysis_request)
         return analysis_request
@@ -53,6 +54,7 @@ class AnalysisReportRepository:
         analysis_report: AnalysisReport,
     ) -> AnalysisRequest:
         analysis_request.status = "COMPLETED"
+        analysis_request.interview_completed = True
         session.add(analysis_report)
         session.commit()
         session.refresh(analysis_request)

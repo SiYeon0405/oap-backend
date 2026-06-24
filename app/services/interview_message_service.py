@@ -9,6 +9,7 @@ from app.schemas.interview_message import (
     InterviewMessageResponse,
     InterviewMessagesResponse,
 )
+from app.services.analysis_report_service import AnalysisReportService
 
 
 class InterviewMessageService:
@@ -57,6 +58,11 @@ class InterviewMessageService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="analysis request not found",
                 )
+            if analysis_request.interview_completed or analysis_request.status != "INTERVIEWING":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="interview is already completed",
+                )
 
             max_message_order = self.repository.find_max_message_order(session, request_id)
             message = InterviewMessage(
@@ -68,17 +74,36 @@ class InterviewMessageService:
             self.repository.save_message(session, message)
 
             messages = self.repository.find_messages(session, request_id)
-            next_question = self.generate_next_question(analysis_request, messages)
-            max_message_order = self.repository.find_max_message_order(session, request_id)
-            ai_message = InterviewMessage(
-                analysis_request_id=request_id,
-                role="AI",
-                content=next_question,
-                message_order=(max_message_order or 0) + 1,
-            )
-            self.repository.save_message(session, ai_message)
+            user_answer_count = sum(1 for message in messages if message.role == "USER")
+            if user_answer_count >= 5:
+                should_start_analysis = True
+            else:
+                should_start_analysis = False
+                next_question = self.generate_next_question(analysis_request, messages)
+                max_message_order = self.repository.find_max_message_order(session, request_id)
+                ai_message = InterviewMessage(
+                    analysis_request_id=request_id,
+                    role="AI",
+                    content=next_question,
+                    message_order=(max_message_order or 0) + 1,
+                )
+                self.repository.save_message(session, ai_message)
+                response_status = analysis_request.status
+                response_interview_completed = analysis_request.interview_completed
 
-        return InterviewAnswerResponse(nextQuestion=ai_message.content)
+        if should_start_analysis:
+            analysis_result = AnalysisReportService().start_analysis(request_id)
+            return InterviewAnswerResponse(
+                nextQuestion=None,
+                status=analysis_result.status,
+                interviewCompleted=True,
+            )
+
+        return InterviewAnswerResponse(
+            nextQuestion=ai_message.content,
+            status=response_status,
+            interviewCompleted=response_interview_completed,
+        )
 
     # TODO: Replace rule-based question generation with OpenAI/AI chatbot call.
     def generate_next_question(
