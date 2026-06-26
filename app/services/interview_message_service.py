@@ -10,6 +10,7 @@ from app.schemas.interview_message import (
     InterviewMessageResponse,
     InterviewMessagesResponse,
 )
+from app.services.analysis_report_service import AnalysisReportService
 
 
 class InterviewMessageService:
@@ -77,6 +78,7 @@ class InterviewMessageService:
                 session.commit()
                 status_value = analysis_request.status
                 interview_completed = analysis_request.interview_completed
+                AnalysisReportService().start_analysis(request_id)
                 return InterviewAnswerResponse(
                     nextQuestion="",
                     status=status_value,
