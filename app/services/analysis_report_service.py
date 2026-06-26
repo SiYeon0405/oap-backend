@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 
+from app.ai.report_ai import generate_analysis_report
 from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
@@ -26,7 +27,7 @@ class AnalysisReportService:
                     detail="analysis report already exists",
                 )
 
-            report_payload = self._build_pending_report_payload()
+            report_payload = generate_analysis_report(analysis_request)
             analysis_report = AnalysisReport(
                 analysis_request_id=request_id,
                 **report_payload,
@@ -67,13 +68,3 @@ class AnalysisReportService:
                 platformRecommendation=report.platform_recommendation,
             )
 
-    def _build_pending_report_payload(self) -> dict[str, dict[str, str]]:
-        # TODO: Replace with AI analysis result
-        return {
-            "service_summary": {"status": "pending"},
-            "market_analysis": {"status": "pending"},
-            "competitor_analysis": {"status": "pending"},
-            "target_customer_analysis": {"status": "pending"},
-            "marketing_strategy": {"status": "pending"},
-            "platform_recommendation": {"status": "pending"},
-        }
