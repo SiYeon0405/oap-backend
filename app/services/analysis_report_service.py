@@ -4,12 +4,20 @@ from app.ai.report_ai import generate_analysis_report
 from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
+from app.repositories.interview_message_repository import InterviewMessageRepository
 from app.schemas.analysis_report import AnalysisReportResponse, AnalysisStartResponse
 
 
 class AnalysisReportService:
-    def __init__(self, repository: AnalysisReportRepository | None = None):
+    def __init__(
+        self,
+        repository: AnalysisReportRepository | None = None,
+        interview_message_repository: InterviewMessageRepository | None = None,
+    ):
         self.repository = repository or AnalysisReportRepository()
+        self.interview_message_repository = (
+            interview_message_repository or InterviewMessageRepository()
+        )
 
     def start_analysis(self, request_id: int) -> AnalysisStartResponse:
         with get_session() as session:
@@ -27,7 +35,18 @@ class AnalysisReportService:
                     detail="analysis report already exists",
                 )
 
-            report_payload = generate_analysis_report(analysis_request)
+            try:
+                interview_messages = self.interview_message_repository.find_messages(
+                    session,
+                    request_id,
+                )
+            except Exception:
+                interview_messages = None
+
+            report_payload = generate_analysis_report(
+                analysis_request,
+                interview_messages,
+            )
             analysis_report = AnalysisReport(
                 analysis_request_id=request_id,
                 **report_payload,

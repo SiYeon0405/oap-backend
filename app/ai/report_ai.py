@@ -11,11 +11,16 @@ REPORT_KEYS = (
     "marketing_strategy",
     "platform_recommendation",
 )
+MAX_MESSAGE_CONTENT_LENGTH = 500
+MAX_INTERVIEW_MESSAGES = 20
 
 
-def generate_analysis_report(analysis_request) -> dict[str, dict]:
+def generate_analysis_report(
+    analysis_request,
+    interview_messages=None,
+) -> dict[str, dict]:
     try:
-        response_text = _request_analysis_report(analysis_request)
+        response_text = _request_analysis_report(analysis_request, interview_messages)
         report = json.loads(response_text)
         if _is_valid_report(report):
             return {key: report[key] for key in REPORT_KEYS}
@@ -25,9 +30,10 @@ def generate_analysis_report(analysis_request) -> dict[str, dict]:
     return _generate_fallback_analysis_report(analysis_request)
 
 
-def _request_analysis_report(analysis_request) -> str:
+def _request_analysis_report(analysis_request, interview_messages=None) -> str:
     service_context = _build_service_context(analysis_request)
-    interview_context = _build_interview_context(analysis_request)
+    user_answer_context = _build_user_answer_context(interview_messages)
+    interview_context = _build_interview_context(interview_messages)
 
     client = OpenAI()
     response = client.responses.create(
@@ -48,7 +54,9 @@ def _request_analysis_report(analysis_request) -> str:
                 "content": (
                     "아래 서비스 정보를 바탕으로 리포트를 생성하세요.\n\n"
                     f"서비스 정보:\n{json.dumps(service_context, ensure_ascii=False)}\n\n"
-                    f"인터뷰 메시지:\n{interview_context}\n\n"
+                    f"USER 답변 요약:\n{user_answer_context}\n\n"
+                    f"전체 인터뷰 문맥:\n{interview_context}\n\n"
+                    "리포트 분석에는 USER 답변을 가장 우선 반영하세요.\n\n"
                     "반환 JSON의 최상위 key는 반드시 다음 6개만 사용하세요:\n"
                     "- service_summary\n"
                     "- market_analysis\n"
@@ -79,21 +87,60 @@ def _build_service_context(analysis_request) -> dict[str, str | None]:
     }
 
 
-def _build_interview_context(analysis_request) -> str:
+def _build_user_answer_context(interview_messages) -> str:
     try:
-        messages = getattr(analysis_request, "messages", None)
-        if messages is None:
-            messages = getattr(analysis_request, "interview_messages", None)
+        messages = _sort_interview_messages(interview_messages)
+        user_messages = [
+            message
+            for message in messages
+            if _is_user_message(message)
+        ]
+        if not user_messages:
+            return "제공된 USER 답변이 없습니다."
+
+        return "\n".join(
+            f"- {_truncate_message_content(getattr(message, 'content', ''))}"
+            for message in user_messages[:MAX_INTERVIEW_MESSAGES]
+        )
+    except Exception:
+        return "USER 답변을 사용할 수 없습니다."
+
+
+def _build_interview_context(interview_messages) -> str:
+    try:
+        messages = _sort_interview_messages(interview_messages)
         if not messages:
             return "제공된 인터뷰 메시지가 없습니다."
 
         return "\n".join(
             f"{getattr(message, 'role', 'unknown')}: "
-            f"{getattr(message, 'content', '')}"
-            for message in messages
+            f"{_truncate_message_content(getattr(message, 'content', ''))}"
+            for message in messages[:MAX_INTERVIEW_MESSAGES]
         )
     except Exception:
         return "인터뷰 메시지를 사용할 수 없습니다."
+
+
+def _sort_interview_messages(interview_messages) -> list:
+    if not interview_messages:
+        return []
+    return sorted(
+        interview_messages,
+        key=lambda message: getattr(message, "message_order", 0) or 0,
+    )
+
+
+def _is_user_message(message) -> bool:
+    role = getattr(message, "role", "")
+    role_value = getattr(role, "value", role)
+    return str(role_value).lower() == "user"
+
+
+def _truncate_message_content(content) -> str:
+    text = str(content or "").strip()
+    if len(text) <= MAX_MESSAGE_CONTENT_LENGTH:
+        return text
+    return f"{text[:MAX_MESSAGE_CONTENT_LENGTH]}..."
 
 
 def _is_valid_report(report) -> bool:
