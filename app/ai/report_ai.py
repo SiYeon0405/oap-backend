@@ -2,6 +2,8 @@ import json
 
 from openai import OpenAI
 
+from app.ai.report_retriever import retrieve_report_knowledge
+
 
 REPORT_KEYS = (
     "service_summary",
@@ -34,6 +36,17 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
     service_context = _build_service_context(analysis_request)
     user_answer_context = _build_user_answer_context(interview_messages)
     interview_context = _build_interview_context(interview_messages)
+    rag_context = retrieve_report_knowledge(
+        "\n".join(
+            [
+                str(service_context.get("service_name") or ""),
+                str(service_context.get("one_line_description") or ""),
+                str(service_context.get("industry") or ""),
+                str(service_context.get("main_question") or ""),
+                user_answer_context,
+            ]
+        )
+    )
 
     client = OpenAI()
     response = client.responses.create(
@@ -49,6 +62,19 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
                     "쉬운 표현으로 작성하고, markdown 코드블록 없이 JSON object만 반환하세요."
                 ),
             },
+            *(
+                [
+                    {
+                        "role": "user",
+                        "content": (
+                            "아래 참고 지식을 우선 반영하되, 사용자 입력과 충돌하면 사용자 입력을 우선하세요.\n\n"
+                            f"{rag_context}"
+                        ),
+                    }
+                ]
+                if rag_context
+                else []
+            ),
             {
                 "role": "user",
                 "content": (
@@ -97,6 +123,15 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
                     "- 각 월별로 목표, 실행 액션, 사용할 채널, 측정할 KPI, 주의할 리스크를 포함하세요.\n"
                     "- 초기 창업자와 소규모 브랜드가 실행 가능한 수준으로 작성하세요.\n"
                     "- 큰 광고 예산이 필요한 전략은 피하고 저예산 실험 중심으로 작성하세요."
+                    "\n\n항목별 추가 품질 기준:\n"
+                    "- 모든 분석 항목은 추상적인 조언보다 바로 실행할 수 있는 문장으로 작성하세요.\n"
+                    "- market_analysis에는 국내 시장 기준, 고객 수요, 진입 난이도, 성장 가능성을 포함하세요.\n"
+                    "- competitor_analysis에는 국내 경쟁사, 대체재, 간접 경쟁 서비스를 함께 포함하세요.\n"
+                    "- target_customer_analysis에는 고객 페르소나, 문제 상황, 구매 동기를 구체적으로 작성하세요.\n"
+                    "- platform_recommendation에는 추천 플랫폼별 활용 목적과 추천 이유를 명확히 작성하세요.\n"
+                    "- marketing_strategy에는 1개월, 2개월, 3개월 실행 로드맵을 포함하세요.\n"
+                    "- 초기 창업자와 소규모 브랜드 기준의 저예산 실행 방안을 우선 작성하세요.\n"
+                    "- 존재하지 않는 기업명을 단정하지 말고, 확실하지 않으면 '유사 서비스/대체재'로 표현하세요."
                 ),
             },
         ],
