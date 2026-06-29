@@ -67,7 +67,9 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
                     {
                         "role": "user",
                         "content": (
-                            "아래 참고 지식을 우선 반영하되, 사용자 입력과 충돌하면 사용자 입력을 우선하세요.\n\n"
+                            "아래 Retrieved Knowledge는 3순위 보조 참고자료입니다. "
+                            "사용자 정보가 부족한 경우에만 참고하고, 서비스 기본 정보나 인터뷰 답변과 충돌하면 "
+                            "서비스 기본 정보와 인터뷰 답변을 우선하세요.\n\n"
                             f"{rag_context}"
                         ),
                     }
@@ -82,7 +84,9 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
                     f"서비스 정보:\n{json.dumps(service_context, ensure_ascii=False)}\n\n"
                     f"USER 답변 요약:\n{user_answer_context}\n\n"
                     f"전체 인터뷰 문맥:\n{interview_context}\n\n"
-                    "리포트 분석에는 USER 답변을 가장 우선 반영하세요.\n\n"
+                    "정보 우선순위는 1순위 서비스 기본 정보, 2순위 사용자 인터뷰 답변, "
+                    "3순위 Retrieved Knowledge입니다. Retrieved Knowledge는 사용자 정보가 부족할 때만 "
+                    "보조 자료로 사용하세요.\n\n"
                     "반환 JSON의 최상위 key는 반드시 다음 6개만 사용하세요:\n"
                     "- service_summary\n"
                     "- market_analysis\n"
@@ -102,7 +106,7 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
                     "전체 리포트 기준:\n"
                     "- 대한민국 시장 기준으로 작성하세요.\n"
                     "- 초기 창업자와 소규모 브랜드가 실행할 수 있는 수준으로 작성하세요.\n"
-                    "- 인터뷰 답변을 최우선 근거로 사용하세요.\n"
+                    "- 서비스 기본 정보와 인터뷰 답변을 Retrieved Knowledge보다 우선 근거로 사용하세요.\n"
                     "- 모르는 사실은 단정하지 마세요.\n"
                     "- 실제 회사명과 플랫폼명은 국내에서 널리 알려진 범위에서만 사용하세요.\n"
                     "- 결과는 반드시 JSON object만 반환하고 markdown 코드블록은 사용하지 마세요.\n"

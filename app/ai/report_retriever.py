@@ -18,13 +18,14 @@ def retrieve_report_knowledge(query: str, top_k: int = 4) -> str:
         if not query.strip() or not os.getenv("OPENAI_API_KEY"):
             return ""
 
+        search_query = _build_embedding_search_query(query)
         chunks = _load_knowledge_chunks()
         if not chunks:
             return ""
 
         client = OpenAI()
         cached_chunks = _load_or_create_cached_embeddings(client, chunks)
-        query_embedding = _embed_texts(client, [query])[0]
+        query_embedding = _embed_texts(client, [search_query])[0]
 
         ranked_chunks = sorted(
             cached_chunks,
@@ -34,14 +35,60 @@ def retrieve_report_knowledge(query: str, top_k: int = 4) -> str:
             ),
             reverse=True,
         )
-        selected_chunks = [
-            chunk["text"].strip()
-            for chunk in ranked_chunks[:top_k]
-            if chunk.get("text", "").strip()
-        ]
+        candidate_chunks = ranked_chunks[:5]
+        selected_chunks = []
+        seen_texts = set()
+        for chunk in candidate_chunks:
+            text = chunk.get("text", "").strip()
+            normalized_text = _normalize_chunk_text(text)
+            if not text or normalized_text in seen_texts:
+                continue
+
+            selected_chunks.append(text)
+            seen_texts.add(normalized_text)
+            if len(selected_chunks) >= min(top_k, 3):
+                break
         return "\n\n---\n\n".join(selected_chunks)
     except Exception:
         return ""
+
+
+def _build_embedding_search_query(query: str) -> str:
+    try:
+        payload = json.loads(query)
+    except json.JSONDecodeError:
+        return query
+
+    if not isinstance(payload, dict):
+        return query
+
+    fields = [
+        ("service_name", "서비스명"),
+        ("name", "서비스명"),
+        ("service_description", "한 줄 설명"),
+        ("description", "한 줄 설명"),
+        ("industry", "업종"),
+        ("business_type", "업종"),
+        ("main_question", "메인 질문"),
+        ("question", "메인 질문"),
+        ("interview_answers", "인터뷰 답변"),
+        ("answers", "인터뷰 답변"),
+    ]
+    parts = []
+    for key, label in fields:
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(f"{label}: {value.strip()}")
+        elif isinstance(value, list):
+            values = [str(item).strip() for item in value if str(item).strip()]
+            if values:
+                parts.append(f"{label}: {' '.join(values)}")
+
+    return "\n".join(parts) if parts else query
+
+
+def _normalize_chunk_text(text: str) -> str:
+    return " ".join(text.split())
 
 
 def _load_knowledge_chunks() -> list[dict]:
@@ -56,9 +103,29 @@ def _load_knowledge_chunks() -> list[dict]:
                     "text": chunk_text,
                     "hash": _content_hash(chunk_text),
                     "mtime": path.stat().st_mtime,
+                    "metadata": {
+                        "category": _infer_chunk_category(chunk_text),
+                    },
                 }
             )
     return chunks
+
+
+def _infer_chunk_category(text: str) -> str:
+    if "경쟁사 분석 기준" in text:
+        return "competitor"
+    if "국내 플랫폼별 활용 기준" in text:
+        return "platform"
+    if (
+        "초기 창업자와 소규모 브랜드의 저예산 마케팅 원칙" in text
+        or "1개월, 2개월, 3개월 실행 로드맵 기준" in text
+    ):
+        return "marketing"
+    if "대한민국 시장 분석 기준" in text:
+        return "market"
+    if any(keyword in text for keyword in ("고객", "타깃", "페르소나")):
+        return "customer"
+    return "general"
 
 
 def _split_markdown_chunks(text: str) -> list[str]:
@@ -68,9 +135,8 @@ def _split_markdown_chunks(text: str) -> list[str]:
     for line in text.splitlines():
         stripped = line.strip()
         starts_heading = stripped.startswith("#")
-        starts_new_paragraph = not stripped
 
-        if (starts_heading or starts_new_paragraph) and current_lines:
+        if starts_heading and current_lines:
             _append_chunk(chunks, "\n".join(current_lines))
             current_lines = []
 
@@ -113,7 +179,12 @@ def _load_or_create_cached_embeddings(client: OpenAI, chunks: list[dict]) -> lis
             and cached_chunk.get("mtime") == chunk["mtime"]
             and cached_chunk.get("embedding")
         ):
-            result.append(cached_chunk)
+            result.append(
+                {
+                    **cached_chunk,
+                    "metadata": chunk.get("metadata", cached_chunk.get("metadata", {})),
+                }
+            )
         else:
             missing_chunks.append(chunk)
 
