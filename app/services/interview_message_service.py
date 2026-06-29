@@ -1,5 +1,6 @@
 from fastapi import HTTPException, status
 
+from app.ai.interview_question_ai import generate_next_question
 from app.database.session import get_session
 from app.models.interview_message import InterviewMessage
 from app.repositories.interview_message_repository import InterviewMessageRepository
@@ -9,19 +10,10 @@ from app.schemas.interview_message import (
     InterviewMessageResponse,
     InterviewMessagesResponse,
 )
+from app.services.analysis_report_service import AnalysisReportService
 
 
 class InterviewMessageService:
-    QUESTION_CANDIDATES = (
-        "서비스의 주요 기능을 조금 더 구체적으로 알려주세요.",
-        "예상 고객은 누구인가요?",
-        "현재 유료 서비스인가요?",
-        "현재 판매 또는 운영 방식은 무엇인가요?",
-        "가장 검증하고 싶은 마케팅 채널은 무엇인가요?",
-        "현재 경쟁 서비스나 참고하고 있는 서비스가 있나요?",
-    )
-    FALLBACK_QUESTION = "추가로 확인하고 싶은 내용이 있다면 자유롭게 말씀해주세요."
-
     def __init__(self, repository: InterviewMessageRepository | None = None):
         self.repository = repository or InterviewMessageRepository()
 
@@ -57,6 +49,14 @@ class InterviewMessageService:
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="analysis request not found",
                 )
+            if (
+                analysis_request.status == "COMPLETED"
+                or analysis_request.interview_completed
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="이미 완료된 인터뷰입니다.",
+                )
 
             max_message_order = self.repository.find_max_message_order(session, request_id)
             message = InterviewMessage(
@@ -68,7 +68,24 @@ class InterviewMessageService:
             self.repository.save_message(session, message)
 
             messages = self.repository.find_messages(session, request_id)
-            next_question = self.generate_next_question(analysis_request, messages)
+            user_answer_count = len(
+                [message for message in messages if message.role == "USER"]
+            )
+            if user_answer_count >= 5:
+                analysis_request.status = "COMPLETED"
+                analysis_request.interview_completed = True
+                session.add(analysis_request)
+                session.commit()
+                status_value = analysis_request.status
+                interview_completed = analysis_request.interview_completed
+                AnalysisReportService().start_analysis(request_id)
+                return InterviewAnswerResponse(
+                    nextQuestion="",
+                    status=status_value,
+                    interviewCompleted=interview_completed,
+                )
+
+            next_question = generate_next_question(analysis_request, messages)
             max_message_order = self.repository.find_max_message_order(session, request_id)
             ai_message = InterviewMessage(
                 analysis_request_id=request_id,
@@ -77,20 +94,13 @@ class InterviewMessageService:
                 message_order=(max_message_order or 0) + 1,
             )
             self.repository.save_message(session, ai_message)
+            status_value = analysis_request.status
+            interview_completed = analysis_request.interview_completed
 
-        return InterviewAnswerResponse(nextQuestion=ai_message.content)
+        return InterviewAnswerResponse(
+            nextQuestion=ai_message.content,
+            status=status_value,
+            interviewCompleted=interview_completed,
+        )
 
-    # TODO: Replace rule-based question generation with OpenAI/AI chatbot call.
-    def generate_next_question(
-        self,
-        analysis_request,
-        messages: list[InterviewMessage],
-    ) -> str:
-        ai_questions = [message.content for message in messages if message.role == "AI"]
-        ai_question_count = len(ai_questions)
 
-        for question in self.QUESTION_CANDIDATES[ai_question_count:]:
-            if question not in ai_questions:
-                return question
-
-        return self.FALLBACK_QUESTION

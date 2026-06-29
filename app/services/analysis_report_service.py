@@ -1,14 +1,23 @@
 from fastapi import HTTPException, status
 
+from app.ai.report_ai import generate_analysis_report
 from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
+from app.repositories.interview_message_repository import InterviewMessageRepository
 from app.schemas.analysis_report import AnalysisReportResponse, AnalysisStartResponse
 
 
 class AnalysisReportService:
-    def __init__(self, repository: AnalysisReportRepository | None = None):
+    def __init__(
+        self,
+        repository: AnalysisReportRepository | None = None,
+        interview_message_repository: InterviewMessageRepository | None = None,
+    ):
         self.repository = repository or AnalysisReportRepository()
+        self.interview_message_repository = (
+            interview_message_repository or InterviewMessageRepository()
+        )
 
     def start_analysis(self, request_id: int) -> AnalysisStartResponse:
         with get_session() as session:
@@ -36,8 +45,18 @@ class AnalysisReportService:
                     detail="analysis request is not interviewing",
                 )
 
-            messages = self.repository.find_messages(session, request_id)
-            report_payload = self._build_report_payload(analysis_request, messages)
+            try:
+                interview_messages = self.interview_message_repository.find_messages(
+                    session,
+                    request_id,
+                )
+            except Exception:
+                interview_messages = None
+
+            report_payload = generate_analysis_report(
+                analysis_request,
+                interview_messages,
+            )
             analysis_report = AnalysisReport(
                 analysis_request_id=request_id,
                 **report_payload,
@@ -78,39 +97,3 @@ class AnalysisReportService:
                 platformRecommendation=report.platform_recommendation,
             )
 
-    def _build_report_payload(self, analysis_request, messages) -> dict[str, dict]:
-        user_answers = [
-            message.content.strip()
-            for message in messages
-            if message.role == "USER" and message.content.strip()
-        ]
-        interview_summary = " ".join(user_answers) or "No user answers provided."
-
-        return {
-            "service_summary": {
-                "serviceName": analysis_request.service_name,
-                "description": analysis_request.one_line_description,
-                "industry": analysis_request.industry,
-                "interviewSummary": interview_summary,
-            },
-            "market_analysis": {
-                "industry": analysis_request.industry,
-                "basis": user_answers[:2],
-            },
-            "competitor_analysis": {
-                "strategy": "Compare direct alternatives mentioned in the interview.",
-                "basis": user_answers,
-            },
-            "target_customer_analysis": {
-                "strategy": "Prioritize the customer segment and pain points from the interview.",
-                "basis": user_answers[:3],
-            },
-            "marketing_strategy": {
-                "strategy": "Validate demand through the channels mentioned in the interview.",
-                "basis": user_answers,
-            },
-            "platform_recommendation": {
-                "strategy": "Start with the smallest platform that supports the described core feature.",
-                "mainQuestion": analysis_request.main_question,
-            },
-        }
