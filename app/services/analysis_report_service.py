@@ -39,7 +39,10 @@ class AnalysisReportService:
                     status=updated_request.status,
                 )
 
-            if analysis_request.status != "INTERVIEWING":
+            if analysis_request.status != "INTERVIEWING" and not (
+                analysis_request.status == "COMPLETED"
+                and analysis_request.interview_completed
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="analysis request is not interviewing",
