@@ -125,8 +125,22 @@ class KnowledgeIngestionService:
             or "1개월, 2개월, 3개월 실행 로드맵 기준" in text
         ):
             return "marketing"
+        if any(
+            keyword in text
+            for keyword in (
+                "고객",
+                "타겟",
+                "타깃",
+                "페르소나",
+                "구매 동기",
+                "불편",
+                "문제",
+                "니즈",
+                "연령대",
+                "주 고객층",
+            )
+        ):
+            return "customer"
         if "대한민국 시장 분석 기준" in text:
             return "market"
-        if any(keyword in text for keyword in ("고객", "타겟", "페르소나")):
-            return "customer"
         return "general"
