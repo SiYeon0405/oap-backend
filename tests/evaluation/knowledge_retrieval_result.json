@@ -2,7 +2,7 @@
   "summary": {
     "totalCases": 20,
     "averageKeywordRecall": 0.8,
-    "averageLatencyMs": 511.18,
+    "averageLatencyMs": 383.15,
     "topK": 3
   },
   "officialBaseline": {
@@ -16,8 +16,8 @@
     "currentAverageKeywordRecall": 0.8,
     "keywordRecallDelta": 0.0,
     "baselineAverageLatencyMs": 934.08,
-    "currentAverageLatencyMs": 511.18,
-    "latencyDeltaMs": -422.9
+    "currentAverageLatencyMs": 383.15,
+    "latencyDeltaMs": -550.93
   },
   "cases": [
     {
@@ -36,7 +36,7 @@
         "건강관리"
       ],
       "keywordRecall": 0.3333333333333333,
-      "latencyMs": 4375.33,
+      "latencyMs": 2047.29,
       "retrievedChunkCount": 3
     },
     {
@@ -55,7 +55,7 @@
         "반려동물"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 256.95,
+      "latencyMs": 315.3,
       "retrievedChunkCount": 3
     },
     {
@@ -73,7 +73,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 713.47,
+      "latencyMs": 366.35,
       "retrievedChunkCount": 3
     },
     {
@@ -92,7 +92,7 @@
         "차별화"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 300.06,
+      "latencyMs": 279.98,
       "retrievedChunkCount": 3
     },
     {
@@ -111,7 +111,7 @@
         "페르소나"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 291.94,
+      "latencyMs": 241.22,
       "retrievedChunkCount": 3
     },
     {
@@ -129,7 +129,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 347.49,
+      "latencyMs": 281.33,
       "retrievedChunkCount": 3
     },
     {
@@ -147,7 +147,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 130.0,
+      "latencyMs": 250.75,
       "retrievedChunkCount": 3
     },
     {
@@ -165,7 +165,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 293.51,
+      "latencyMs": 268.15,
       "retrievedChunkCount": 3
     },
     {
@@ -183,7 +183,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 325.46,
+      "latencyMs": 300.7,
       "retrievedChunkCount": 3
     },
     {
@@ -202,7 +202,7 @@
         "메시지"
       ],
       "keywordRecall": 0.3333333333333333,
-      "latencyMs": 248.97,
+      "latencyMs": 289.51,
       "retrievedChunkCount": 3
     },
     {
@@ -220,7 +220,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 382.8,
+      "latencyMs": 299.54,
       "retrievedChunkCount": 3
     },
     {
@@ -239,7 +239,7 @@
         "검증"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 227.61,
+      "latencyMs": 279.37,
       "retrievedChunkCount": 3
     },
     {
@@ -257,7 +257,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 293.11,
+      "latencyMs": 297.88,
       "retrievedChunkCount": 3
     },
     {
@@ -276,7 +276,7 @@
         "차별화"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 238.41,
+      "latencyMs": 129.59,
       "retrievedChunkCount": 3
     },
     {
@@ -295,7 +295,7 @@
         "효과"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 257.39,
+      "latencyMs": 396.82,
       "retrievedChunkCount": 3
     },
     {
@@ -314,7 +314,7 @@
         "KPI"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 404.6,
+      "latencyMs": 278.02,
       "retrievedChunkCount": 3
     },
     {
@@ -332,7 +332,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 269.16,
+      "latencyMs": 350.53,
       "retrievedChunkCount": 3
     },
     {
@@ -350,7 +350,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 287.78,
+      "latencyMs": 390.34,
       "retrievedChunkCount": 3
     },
     {
@@ -368,7 +368,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 299.67,
+      "latencyMs": 298.09,
       "retrievedChunkCount": 3
     },
     {
@@ -387,7 +387,7 @@
         "반려동물"
       ],
       "keywordRecall": 0.6666666666666666,
-      "latencyMs": 279.91,
+      "latencyMs": 302.17,
       "retrievedChunkCount": 3
     }
   ]
