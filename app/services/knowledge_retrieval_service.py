@@ -7,6 +7,8 @@ from app.services.embedding_service import EmbeddingService
 
 
 class KnowledgeRetrievalService:
+    ALLOWED_METADATA_FILTER_KEYS = {"category", "domain", "source_type"}
+
     def __init__(self, embedding_service: EmbeddingService | None = None):
         self.embedding_service = embedding_service or EmbeddingService()
 
@@ -20,7 +22,11 @@ class KnowledgeRetrievalService:
         if top_k < 1:
             raise ValueError("top_k must be greater than 0.")
 
-        filters = metadata_filter or {}
+        filters = {
+            key: value
+            for key, value in (metadata_filter or {}).items()
+            if key in self.ALLOWED_METADATA_FILTER_KEYS
+        }
         where_conditions = ["kc.embedding <=> kc.embedding = 0"]
         params: dict[str, Any] = {"top_k": top_k}
 
