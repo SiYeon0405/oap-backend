@@ -6,6 +6,9 @@ from pathlib import Path
 
 from openai import OpenAI
 
+from app.database.session import get_session
+from app.services.knowledge_retrieval_service import KnowledgeRetrievalService
+
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
 CACHE_PATH = KNOWLEDGE_DIR / ".cache" / "report_knowledge_embeddings.json"
@@ -14,43 +17,28 @@ MAX_CHUNK_LENGTH = 1200
 
 
 def retrieve_report_knowledge(query: str, top_k: int = 4) -> str:
+    session = None
     try:
-        if not query.strip() or not os.getenv("OPENAI_API_KEY"):
+        if not query.strip():
             return ""
 
         search_query = _build_embedding_search_query(query)
-        chunks = _load_knowledge_chunks()
-        if not chunks:
-            return ""
-
-        client = OpenAI()
-        cached_chunks = _load_or_create_cached_embeddings(client, chunks)
-        query_embedding = _embed_texts(client, [search_query])[0]
-
-        ranked_chunks = sorted(
-            cached_chunks,
-            key=lambda chunk: _cosine_similarity(
-                query_embedding,
-                chunk.get("embedding", []),
-            ),
-            reverse=True,
+        session = get_session()
+        results = KnowledgeRetrievalService().retrieve(
+            session=session,
+            query=search_query,
+            top_k=3,
         )
-        candidate_chunks = ranked_chunks[:5]
-        selected_chunks = []
-        seen_texts = set()
-        for chunk in candidate_chunks:
-            text = chunk.get("text", "").strip()
-            normalized_text = _normalize_chunk_text(text)
-            if not text or normalized_text in seen_texts:
-                continue
-
-            selected_chunks.append(text)
-            seen_texts.add(normalized_text)
-            if len(selected_chunks) >= min(top_k, 3):
-                break
-        return "\n\n---\n\n".join(selected_chunks)
+        return "\n\n---\n\n".join(
+            str(result.get("content") or "").strip()
+            for result in results
+            if str(result.get("content") or "").strip()
+        )
     except Exception:
         return ""
+    finally:
+        if session is not None:
+            session.close()
 
 
 def _build_embedding_search_query(query: str) -> str:
