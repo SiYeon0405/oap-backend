@@ -1,0 +1,394 @@
+{
+  "summary": {
+    "totalCases": 20,
+    "averageKeywordRecall": 0.8,
+    "averageLatencyMs": 511.18,
+    "topK": 3
+  },
+  "officialBaseline": {
+    "totalCases": 20,
+    "averageKeywordRecall": 0.8,
+    "averageLatencyMs": 934.08,
+    "topK": 3
+  },
+  "comparison": {
+    "baselineAverageKeywordRecall": 0.8,
+    "currentAverageKeywordRecall": 0.8,
+    "keywordRecallDelta": 0.0,
+    "baselineAverageLatencyMs": 934.08,
+    "currentAverageLatencyMs": 511.18,
+    "latencyDeltaMs": -422.9
+  },
+  "cases": [
+    {
+      "caseId": "RAG-001",
+      "query": "대한민국 펫테크 시장에서 반려동물 건강관리 서비스의 성장 요인은 무엇인가?",
+      "expectedKeywords": [
+        "반려동물",
+        "건강관리",
+        "시장"
+      ],
+      "matchedKeywords": [
+        "시장"
+      ],
+      "missingKeywords": [
+        "반려동물",
+        "건강관리"
+      ],
+      "keywordRecall": 0.3333333333333333,
+      "latencyMs": 4375.33,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-002",
+      "query": "국내 반려동물 서비스 초기 창업자가 우선 검토해야 할 고객 문제는 무엇인가?",
+      "expectedKeywords": [
+        "반려동물",
+        "고객",
+        "문제"
+      ],
+      "matchedKeywords": [
+        "고객",
+        "문제"
+      ],
+      "missingKeywords": [
+        "반려동물"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 256.95,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-003",
+      "query": "대한민국 뷰티 서비스가 초기 고객을 확보할 때 적합한 국내 플랫폼은 무엇인가?",
+      "expectedKeywords": [
+        "인스타그램",
+        "네이버",
+        "플랫폼"
+      ],
+      "matchedKeywords": [
+        "인스타그램",
+        "네이버",
+        "플랫폼"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 713.47,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-004",
+      "query": "소규모 뷰티 브랜드가 국내 경쟁사와 차별화하기 위해 확인해야 할 요소는 무엇인가?",
+      "expectedKeywords": [
+        "경쟁",
+        "차별화",
+        "브랜드"
+      ],
+      "matchedKeywords": [
+        "경쟁",
+        "브랜드"
+      ],
+      "missingKeywords": [
+        "차별화"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 300.06,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-005",
+      "query": "국내 헬스케어 서비스 리포트에서 고객 페르소나를 분석할 때 필요한 기준은 무엇인가?",
+      "expectedKeywords": [
+        "고객",
+        "페르소나",
+        "분석"
+      ],
+      "matchedKeywords": [
+        "고객",
+        "분석"
+      ],
+      "missingKeywords": [
+        "페르소나"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 291.94,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-006",
+      "query": "대한민국 헬스케어 시장에 진입하는 초기 서비스가 경쟁 채널을 검토하는 방법은 무엇인가?",
+      "expectedKeywords": [
+        "시장",
+        "경쟁",
+        "채널"
+      ],
+      "matchedKeywords": [
+        "시장",
+        "경쟁",
+        "채널"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 347.49,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-007",
+      "query": "국내 교육 서비스가 네이버 블로그와 검색 채널을 활용해야 하는 상황은 언제인가?",
+      "expectedKeywords": [
+        "네이버",
+        "블로그",
+        "검색"
+      ],
+      "matchedKeywords": [
+        "네이버",
+        "블로그",
+        "검색"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 130.0,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-008",
+      "query": "초기 교육 플랫폼이 대한민국 시장에서 고객 구매 동기를 분석하는 기준은 무엇인가?",
+      "expectedKeywords": [
+        "고객",
+        "구매",
+        "시장"
+      ],
+      "matchedKeywords": [
+        "고객",
+        "구매",
+        "시장"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 293.51,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-009",
+      "query": "국내 식품 브랜드가 초기 마케팅 전략을 1개월 단위로 실행할 때 포함해야 할 항목은 무엇인가?",
+      "expectedKeywords": [
+        "마케팅",
+        "1개월",
+        "실행"
+      ],
+      "matchedKeywords": [
+        "마케팅",
+        "1개월",
+        "실행"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 325.46,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-010",
+      "query": "대한민국 식품 시장에서 소규모 브랜드가 경쟁사를 분석할 때 비교해야 할 기준은 무엇인가?",
+      "expectedKeywords": [
+        "경쟁사",
+        "가격",
+        "메시지"
+      ],
+      "matchedKeywords": [
+        "경쟁사"
+      ],
+      "missingKeywords": [
+        "가격",
+        "메시지"
+      ],
+      "keywordRecall": 0.3333333333333333,
+      "latencyMs": 248.97,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-011",
+      "query": "국내 로컬서비스가 지역 고객을 확보하기 위해 우선 활용할 수 있는 플랫폼은 무엇인가?",
+      "expectedKeywords": [
+        "네이버",
+        "카카오",
+        "플랫폼"
+      ],
+      "matchedKeywords": [
+        "네이버",
+        "카카오",
+        "플랫폼"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 382.8,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-012",
+      "query": "대한민국 로컬서비스 창업자가 고객 불편을 검증하기 위해 확인해야 할 자료는 무엇인가?",
+      "expectedKeywords": [
+        "고객",
+        "불편",
+        "검증"
+      ],
+      "matchedKeywords": [
+        "고객",
+        "불편"
+      ],
+      "missingKeywords": [
+        "검증"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 227.61,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-013",
+      "query": "국내 패션 브랜드가 인스타그램을 마케팅 채널로 검토해야 하는 이유는 무엇인가?",
+      "expectedKeywords": [
+        "인스타그램",
+        "브랜드",
+        "마케팅"
+      ],
+      "matchedKeywords": [
+        "인스타그램",
+        "브랜드",
+        "마케팅"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 293.11,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-014",
+      "query": "초기 패션 서비스가 국내 경쟁 브랜드와 차별화할 때 리포트에 포함해야 할 분석 요소는 무엇인가?",
+      "expectedKeywords": [
+        "경쟁",
+        "브랜드",
+        "차별화"
+      ],
+      "matchedKeywords": [
+        "경쟁",
+        "브랜드"
+      ],
+      "missingKeywords": [
+        "차별화"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 238.41,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-015",
+      "query": "대한민국 콘텐츠 서비스가 유튜브나 인스타그램을 활용할 때 기대할 수 있는 효과는 무엇인가?",
+      "expectedKeywords": [
+        "유튜브",
+        "인스타그램",
+        "효과"
+      ],
+      "matchedKeywords": [
+        "유튜브",
+        "인스타그램"
+      ],
+      "missingKeywords": [
+        "효과"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 257.39,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-016",
+      "query": "국내 콘텐츠 서비스의 초기 고객 반응을 확인하기 위한 KPI는 어떤 방식으로 설정해야 하는가?",
+      "expectedKeywords": [
+        "고객",
+        "KPI",
+        "반응"
+      ],
+      "matchedKeywords": [
+        "고객",
+        "반응"
+      ],
+      "missingKeywords": [
+        "KPI"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 404.6,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-017",
+      "query": "대한민국 SaaS 서비스가 초기 진입 장벽과 시장 가능성을 분석할 때 필요한 관점은 무엇인가?",
+      "expectedKeywords": [
+        "시장",
+        "진입",
+        "가능성"
+      ],
+      "matchedKeywords": [
+        "시장",
+        "진입",
+        "가능성"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 269.16,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-018",
+      "query": "국내 SaaS 서비스가 경쟁 제품 대신 간접 경쟁 채널까지 분석해야 하는 이유는 무엇인가?",
+      "expectedKeywords": [
+        "경쟁",
+        "채널",
+        "분석"
+      ],
+      "matchedKeywords": [
+        "경쟁",
+        "채널",
+        "분석"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 287.78,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-019",
+      "query": "국내 초기 브랜드가 저예산 마케팅을 실행할 때 1개월, 2개월, 3개월 로드맵은 어떻게 구성해야 하는가?",
+      "expectedKeywords": [
+        "저예산",
+        "1개월",
+        "로드맵"
+      ],
+      "matchedKeywords": [
+        "저예산",
+        "1개월",
+        "로드맵"
+      ],
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 299.67,
+      "retrievedChunkCount": 3
+    },
+    {
+      "caseId": "RAG-020",
+      "query": "대한민국 반려동물 서비스 리포트에서 플랫폼 추천을 작성할 때 포함해야 할 실행 방법은 무엇인가?",
+      "expectedKeywords": [
+        "반려동물",
+        "플랫폼",
+        "실행"
+      ],
+      "matchedKeywords": [
+        "플랫폼",
+        "실행"
+      ],
+      "missingKeywords": [
+        "반려동물"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "latencyMs": 279.91,
+      "retrievedChunkCount": 3
+    }
+  ]
+}
