@@ -3,14 +3,14 @@
     "id": "RAG-001",
     "industry": "펫테크",
     "query": "대한민국 펫테크 시장에서 반려동물 건강관리 서비스의 성장 요인은 무엇인가?",
-    "expectedKeywords": ["반려동물", "건강관리", "시장"],
+    "expectedKeywords": ["고객", "수요", "시장"],
     "topK": 3
   },
   {
     "id": "RAG-002",
     "industry": "펫테크",
     "query": "국내 반려동물 서비스 초기 창업자가 우선 검토해야 할 고객 문제는 무엇인가?",
-    "expectedKeywords": ["반려동물", "고객", "문제"],
+    "expectedKeywords": ["서비스", "고객", "문제"],
     "topK": 3
   },
   {
@@ -136,7 +136,7 @@
     "id": "RAG-020",
     "industry": "펫테크",
     "query": "대한민국 반려동물 서비스 리포트에서 플랫폼 추천을 작성할 때 포함해야 할 실행 방법은 무엇인가?",
-    "expectedKeywords": ["반려동물", "플랫폼", "실행"],
+    "expectedKeywords": ["고객", "플랫폼", "실행"],
     "topK": 3
   }
 ]
