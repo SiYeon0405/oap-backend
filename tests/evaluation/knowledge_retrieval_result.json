@@ -1,8 +1,8 @@
 {
   "summary": {
     "totalCases": 20,
-    "averageKeywordRecall": 0.8,
-    "averageLatencyMs": 383.15,
+    "averageKeywordRecall": 1.0,
+    "averageLatencyMs": 348.84,
     "topK": 3
   },
   "officialBaseline": {
@@ -13,49 +13,47 @@
   },
   "comparison": {
     "baselineAverageKeywordRecall": 0.8,
-    "currentAverageKeywordRecall": 0.8,
-    "keywordRecallDelta": 0.0,
+    "currentAverageKeywordRecall": 1.0,
+    "keywordRecallDelta": 0.2,
     "baselineAverageLatencyMs": 934.08,
-    "currentAverageLatencyMs": 383.15,
-    "latencyDeltaMs": -550.93
+    "currentAverageLatencyMs": 348.84,
+    "latencyDeltaMs": -585.24
   },
   "cases": [
     {
       "caseId": "RAG-001",
       "query": "대한민국 펫테크 시장에서 반려동물 건강관리 서비스의 성장 요인은 무엇인가?",
       "expectedKeywords": [
-        "반려동물",
-        "건강관리",
+        "고객",
+        "수요",
         "시장"
       ],
       "matchedKeywords": [
+        "고객",
+        "수요",
         "시장"
       ],
-      "missingKeywords": [
-        "반려동물",
-        "건강관리"
-      ],
-      "keywordRecall": 0.3333333333333333,
-      "latencyMs": 2047.29,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 1111.02,
       "retrievedChunkCount": 3
     },
     {
       "caseId": "RAG-002",
       "query": "국내 반려동물 서비스 초기 창업자가 우선 검토해야 할 고객 문제는 무엇인가?",
       "expectedKeywords": [
-        "반려동물",
+        "서비스",
         "고객",
         "문제"
       ],
       "matchedKeywords": [
+        "서비스",
         "고객",
         "문제"
       ],
-      "missingKeywords": [
-        "반려동물"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 315.3,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 313.99,
       "retrievedChunkCount": 3
     },
     {
@@ -73,7 +71,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 366.35,
+      "latencyMs": 238.24,
       "retrievedChunkCount": 3
     },
     {
@@ -86,13 +84,12 @@
       ],
       "matchedKeywords": [
         "경쟁",
+        "차별화",
         "브랜드"
       ],
-      "missingKeywords": [
-        "차별화"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 279.98,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 230.49,
       "retrievedChunkCount": 3
     },
     {
@@ -105,13 +102,12 @@
       ],
       "matchedKeywords": [
         "고객",
+        "페르소나",
         "분석"
       ],
-      "missingKeywords": [
-        "페르소나"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 241.22,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 269.57,
       "retrievedChunkCount": 3
     },
     {
@@ -129,7 +125,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 281.33,
+      "latencyMs": 240.24,
       "retrievedChunkCount": 3
     },
     {
@@ -147,7 +143,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 250.75,
+      "latencyMs": 278.79,
       "retrievedChunkCount": 3
     },
     {
@@ -165,7 +161,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 268.15,
+      "latencyMs": 911.34,
       "retrievedChunkCount": 3
     },
     {
@@ -183,7 +179,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 300.7,
+      "latencyMs": 270.14,
       "retrievedChunkCount": 3
     },
     {
@@ -195,14 +191,13 @@
         "메시지"
       ],
       "matchedKeywords": [
-        "경쟁사"
-      ],
-      "missingKeywords": [
+        "경쟁사",
         "가격",
         "메시지"
       ],
-      "keywordRecall": 0.3333333333333333,
-      "latencyMs": 289.51,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 282.44,
       "retrievedChunkCount": 3
     },
     {
@@ -220,7 +215,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 299.54,
+      "latencyMs": 120.14,
       "retrievedChunkCount": 3
     },
     {
@@ -233,13 +228,12 @@
       ],
       "matchedKeywords": [
         "고객",
-        "불편"
-      ],
-      "missingKeywords": [
+        "불편",
         "검증"
       ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 279.37,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 279.4,
       "retrievedChunkCount": 3
     },
     {
@@ -257,7 +251,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 297.88,
+      "latencyMs": 487.82,
       "retrievedChunkCount": 3
     },
     {
@@ -270,13 +264,12 @@
       ],
       "matchedKeywords": [
         "경쟁",
-        "브랜드"
-      ],
-      "missingKeywords": [
+        "브랜드",
         "차별화"
       ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 129.59,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 398.72,
       "retrievedChunkCount": 3
     },
     {
@@ -289,13 +282,12 @@
       ],
       "matchedKeywords": [
         "유튜브",
-        "인스타그램"
-      ],
-      "missingKeywords": [
+        "인스타그램",
         "효과"
       ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 396.82,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 213.02,
       "retrievedChunkCount": 3
     },
     {
@@ -308,13 +300,12 @@
       ],
       "matchedKeywords": [
         "고객",
+        "KPI",
         "반응"
       ],
-      "missingKeywords": [
-        "KPI"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 278.02,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 268.57,
       "retrievedChunkCount": 3
     },
     {
@@ -332,7 +323,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 350.53,
+      "latencyMs": 291.68,
       "retrievedChunkCount": 3
     },
     {
@@ -350,7 +341,7 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 390.34,
+      "latencyMs": 237.67,
       "retrievedChunkCount": 3
     },
     {
@@ -368,26 +359,25 @@
       ],
       "missingKeywords": [],
       "keywordRecall": 1.0,
-      "latencyMs": 298.09,
+      "latencyMs": 289.17,
       "retrievedChunkCount": 3
     },
     {
       "caseId": "RAG-020",
       "query": "대한민국 반려동물 서비스 리포트에서 플랫폼 추천을 작성할 때 포함해야 할 실행 방법은 무엇인가?",
       "expectedKeywords": [
-        "반려동물",
+        "고객",
         "플랫폼",
         "실행"
       ],
       "matchedKeywords": [
+        "고객",
         "플랫폼",
         "실행"
       ],
-      "missingKeywords": [
-        "반려동물"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "latencyMs": 302.17,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "latencyMs": 244.28,
       "retrievedChunkCount": 3
     }
   ]

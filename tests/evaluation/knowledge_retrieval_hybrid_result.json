@@ -2,16 +2,16 @@
   "summary": {
     "retrievalMode": "hybrid_rrf",
     "totalCases": 20,
-    "averageKeywordRecall": 0.8667,
-    "averageLatencyMs": 628.77,
+    "averageKeywordRecall": 0.95,
+    "averageLatencyMs": 717.19,
     "topK": 3,
-    "improvedCaseCount": 1,
-    "regressedCaseCount": 1,
-    "unchangedCaseCount": 18,
-    "improvedCaseIds": [
-      "RAG-010"
-    ],
+    "improvedCaseCount": 0,
+    "regressedCaseCount": 3,
+    "unchangedCaseCount": 17,
+    "improvedCaseIds": [],
     "regressedCaseIds": [
+      "RAG-004",
+      "RAG-010",
       "RAG-014"
     ]
   },
@@ -24,11 +24,11 @@
   },
   "comparison": {
     "baselineAverageKeywordRecall": 0.8,
-    "currentAverageKeywordRecall": 0.8667,
-    "keywordRecallDelta": 0.0667,
+    "currentAverageKeywordRecall": 0.95,
+    "keywordRecallDelta": 0.15,
     "baselineAverageLatencyMs": 339.4,
-    "currentAverageLatencyMs": 628.77,
-    "latencyDeltaMs": 289.37
+    "currentAverageLatencyMs": 717.19,
+    "latencyDeltaMs": 377.79
   },
   "cases": [
     {
@@ -78,7 +78,7 @@
           "chunkIndex": 2
         }
       ],
-      "latencyMs": 1368.64,
+      "latencyMs": 1271.45,
       "retrievedChunkCount": 3
     },
     {
@@ -107,11 +107,11 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 3
+          "chunkIndex": 0
         },
         {
           "documentId": 6,
-          "chunkIndex": 0
+          "chunkIndex": 3
         }
       ],
       "hybridTopK": [
@@ -121,14 +121,14 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 1
+          "chunkIndex": 0
         },
         {
           "documentId": 6,
-          "chunkIndex": 0
+          "chunkIndex": 1
         }
       ],
-      "latencyMs": 512.15,
+      "latencyMs": 686.71,
       "retrievedChunkCount": 3
     },
     {
@@ -178,7 +178,7 @@
           "chunkIndex": 1
         }
       ],
-      "latencyMs": 790.86,
+      "latencyMs": 565.12,
       "retrievedChunkCount": 3
     },
     {
@@ -197,10 +197,10 @@
         "차별화"
       ],
       "keywordRecall": 0.6666666666666666,
-      "vectorKeywordRecall": 0.6666666666666666,
+      "vectorKeywordRecall": 1.0,
       "hybridKeywordRecall": 0.6666666666666666,
-      "recallDelta": 0.0,
-      "classification": "UNCHANGED",
+      "recallDelta": -0.3333,
+      "classification": "REGRESSED",
       "vectorTopK": [
         {
           "documentId": 6,
@@ -222,14 +222,14 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 1
+          "chunkIndex": 4
         },
         {
           "documentId": 6,
-          "chunkIndex": 3
+          "chunkIndex": 1
         }
       ],
-      "latencyMs": 378.75,
+      "latencyMs": 1358.14,
       "retrievedChunkCount": 3
     },
     {
@@ -242,14 +242,13 @@
       ],
       "matchedKeywords": [
         "고객",
+        "페르소나",
         "분석"
       ],
-      "missingKeywords": [
-        "페르소나"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "vectorKeywordRecall": 0.6666666666666666,
-      "hybridKeywordRecall": 0.6666666666666666,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "vectorKeywordRecall": 1.0,
+      "hybridKeywordRecall": 1.0,
       "recallDelta": 0.0,
       "classification": "UNCHANGED",
       "vectorTopK": [
@@ -259,11 +258,11 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 2
+          "chunkIndex": 3
         },
         {
           "documentId": 6,
-          "chunkIndex": 3
+          "chunkIndex": 4
         }
       ],
       "hybridTopK": [
@@ -273,14 +272,14 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 2
+          "chunkIndex": 0
         },
         {
           "documentId": 6,
-          "chunkIndex": 0
+          "chunkIndex": 2
         }
       ],
-      "latencyMs": 511.73,
+      "latencyMs": 880.56,
       "retrievedChunkCount": 3
     },
     {
@@ -327,10 +326,10 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 3
+          "chunkIndex": 4
         }
       ],
-      "latencyMs": 361.06,
+      "latencyMs": 552.33,
       "retrievedChunkCount": 3
     },
     {
@@ -380,7 +379,7 @@
           "chunkIndex": 3
         }
       ],
-      "latencyMs": 545.87,
+      "latencyMs": 548.05,
       "retrievedChunkCount": 3
     },
     {
@@ -430,7 +429,7 @@
           "chunkIndex": 1
         }
       ],
-      "latencyMs": 695.49,
+      "latencyMs": 718.98,
       "retrievedChunkCount": 3
     },
     {
@@ -480,7 +479,7 @@
           "chunkIndex": 2
         }
       ],
-      "latencyMs": 524.54,
+      "latencyMs": 649.32,
       "retrievedChunkCount": 3
     },
     {
@@ -499,15 +498,11 @@
         "가격"
       ],
       "keywordRecall": 0.6666666666666666,
-      "vectorKeywordRecall": 0.3333333333333333,
+      "vectorKeywordRecall": 1.0,
       "hybridKeywordRecall": 0.6666666666666666,
-      "recallDelta": 0.3333,
-      "classification": "IMPROVED",
+      "recallDelta": -0.3333,
+      "classification": "REGRESSED",
       "vectorTopK": [
-        {
-          "documentId": 6,
-          "chunkIndex": 0
-        },
         {
           "documentId": 6,
           "chunkIndex": 3
@@ -515,23 +510,27 @@
         {
           "documentId": 6,
           "chunkIndex": 1
+        },
+        {
+          "documentId": 6,
+          "chunkIndex": 0
         }
       ],
       "hybridTopK": [
         {
           "documentId": 6,
-          "chunkIndex": 0
+          "chunkIndex": 4
+        },
+        {
+          "documentId": 6,
+          "chunkIndex": 1
         },
         {
           "documentId": 6,
           "chunkIndex": 5
-        },
-        {
-          "documentId": 6,
-          "chunkIndex": 4
         }
       ],
-      "latencyMs": 571.19,
+      "latencyMs": 890.08,
       "retrievedChunkCount": 3
     },
     {
@@ -564,7 +563,7 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 3
+          "chunkIndex": 0
         }
       ],
       "hybridTopK": [
@@ -581,7 +580,7 @@
           "chunkIndex": 0
         }
       ],
-      "latencyMs": 641.35,
+      "latencyMs": 543.8,
       "retrievedChunkCount": 3
     },
     {
@@ -594,14 +593,13 @@
       ],
       "matchedKeywords": [
         "고객",
-        "불편"
-      ],
-      "missingKeywords": [
+        "불편",
         "검증"
       ],
-      "keywordRecall": 0.6666666666666666,
-      "vectorKeywordRecall": 0.6666666666666666,
-      "hybridKeywordRecall": 0.6666666666666666,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "vectorKeywordRecall": 1.0,
+      "hybridKeywordRecall": 1.0,
       "recallDelta": 0.0,
       "classification": "UNCHANGED",
       "vectorTopK": [
@@ -615,7 +613,7 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 5
+          "chunkIndex": 4
         }
       ],
       "hybridTopK": [
@@ -632,7 +630,7 @@
           "chunkIndex": 5
         }
       ],
-      "latencyMs": 722.53,
+      "latencyMs": 538.39,
       "retrievedChunkCount": 3
     },
     {
@@ -682,7 +680,7 @@
           "chunkIndex": 2
         }
       ],
-      "latencyMs": 650.38,
+      "latencyMs": 658.39,
       "retrievedChunkCount": 3
     },
     {
@@ -694,15 +692,15 @@
         "차별화"
       ],
       "matchedKeywords": [
-        "경쟁"
-      ],
-      "missingKeywords": [
-        "브랜드",
+        "경쟁",
         "차별화"
       ],
-      "keywordRecall": 0.3333333333333333,
-      "vectorKeywordRecall": 0.6666666666666666,
-      "hybridKeywordRecall": 0.3333333333333333,
+      "missingKeywords": [
+        "브랜드"
+      ],
+      "keywordRecall": 0.6666666666666666,
+      "vectorKeywordRecall": 1.0,
+      "hybridKeywordRecall": 0.6666666666666666,
       "recallDelta": -0.3333,
       "classification": "REGRESSED",
       "vectorTopK": [
@@ -733,7 +731,7 @@
           "chunkIndex": 2
         }
       ],
-      "latencyMs": 669.66,
+      "latencyMs": 508.99,
       "retrievedChunkCount": 3
     },
     {
@@ -746,14 +744,13 @@
       ],
       "matchedKeywords": [
         "유튜브",
-        "인스타그램"
-      ],
-      "missingKeywords": [
+        "인스타그램",
         "효과"
       ],
-      "keywordRecall": 0.6666666666666666,
-      "vectorKeywordRecall": 0.6666666666666666,
-      "hybridKeywordRecall": 0.6666666666666666,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "vectorKeywordRecall": 1.0,
+      "hybridKeywordRecall": 1.0,
       "recallDelta": 0.0,
       "classification": "UNCHANGED",
       "vectorTopK": [
@@ -781,10 +778,10 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 1
+          "chunkIndex": 3
         }
       ],
-      "latencyMs": 950.84,
+      "latencyMs": 704.51,
       "retrievedChunkCount": 3
     },
     {
@@ -797,14 +794,13 @@
       ],
       "matchedKeywords": [
         "고객",
+        "KPI",
         "반응"
       ],
-      "missingKeywords": [
-        "KPI"
-      ],
-      "keywordRecall": 0.6666666666666666,
-      "vectorKeywordRecall": 0.6666666666666666,
-      "hybridKeywordRecall": 0.6666666666666666,
+      "missingKeywords": [],
+      "keywordRecall": 1.0,
+      "vectorKeywordRecall": 1.0,
+      "hybridKeywordRecall": 1.0,
       "recallDelta": 0.0,
       "classification": "UNCHANGED",
       "vectorTopK": [
@@ -828,14 +824,14 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 2
+          "chunkIndex": 3
         },
         {
           "documentId": 6,
-          "chunkIndex": 3
+          "chunkIndex": 2
         }
       ],
-      "latencyMs": 499.22,
+      "latencyMs": 518.89,
       "retrievedChunkCount": 3
     },
     {
@@ -882,10 +878,10 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 5
+          "chunkIndex": 4
         }
       ],
-      "latencyMs": 562.88,
+      "latencyMs": 716.94,
       "retrievedChunkCount": 3
     },
     {
@@ -932,10 +928,10 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 1
+          "chunkIndex": 4
         }
       ],
-      "latencyMs": 448.52,
+      "latencyMs": 713.37,
       "retrievedChunkCount": 3
     },
     {
@@ -985,7 +981,7 @@
           "chunkIndex": 2
         }
       ],
-      "latencyMs": 680.46,
+      "latencyMs": 737.06,
       "retrievedChunkCount": 3
     },
     {
@@ -1014,11 +1010,11 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 4
+          "chunkIndex": 0
         },
         {
           "documentId": 6,
-          "chunkIndex": 0
+          "chunkIndex": 4
         }
       ],
       "hybridTopK": [
@@ -1028,14 +1024,14 @@
         },
         {
           "documentId": 6,
-          "chunkIndex": 4
+          "chunkIndex": 0
         },
         {
           "documentId": 6,
-          "chunkIndex": 0
+          "chunkIndex": 4
         }
       ],
-      "latencyMs": 489.22,
+      "latencyMs": 582.8,
       "retrievedChunkCount": 3
     }
   ]

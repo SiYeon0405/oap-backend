@@ -32,6 +32,17 @@ class KnowledgeRepository:
     ) -> KnowledgeDocument | None:
         return session.get(KnowledgeDocument, document_id)
 
+    def find_document_by_source_path(
+        self,
+        session: Session,
+        source_path: str,
+    ) -> KnowledgeDocument | None:
+        return (
+            session.query(KnowledgeDocument)
+            .filter(KnowledgeDocument.source_path == source_path)
+            .one_or_none()
+        )
+
     def create_chunks(
         self,
         session: Session,
@@ -64,4 +75,15 @@ class KnowledgeRepository:
             .filter(KnowledgeChunk.document_id == document_id)
             .order_by(KnowledgeChunk.chunk_index.asc())
             .all()
+        )
+
+    def delete_chunks_by_document_id(
+        self,
+        session: Session,
+        document_id: int,
+    ) -> int:
+        return (
+            session.query(KnowledgeChunk)
+            .filter(KnowledgeChunk.document_id == document_id)
+            .delete(synchronize_session=False)
         )
