@@ -1,7 +1,6 @@
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, text
-from sqlalchemy.orm import declarative_base
 
-Base = declarative_base()
+from app.models.base import Base
 
 
 class AnalysisRequest(Base):

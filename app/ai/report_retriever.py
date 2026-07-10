@@ -17,10 +17,18 @@ MAX_CHUNK_LENGTH = 1200
 
 
 def retrieve_report_knowledge(query: str, top_k: int = 4) -> str:
+    evidences = retrieve_report_evidences(query, top_k=top_k)
+    return "\n\n---\n\n".join(
+        evidence["content"]
+        for evidence in evidences
+    )
+
+
+def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
     session = None
     try:
         if not query.strip():
-            return ""
+            return []
 
         search_query = _build_embedding_search_query(query)
         session = get_session()
@@ -29,16 +37,37 @@ def retrieve_report_knowledge(query: str, top_k: int = 4) -> str:
             query=search_query,
             top_k=3,
         )
-        return "\n\n---\n\n".join(
-            str(result.get("content") or "").strip()
-            for result in results
-            if str(result.get("content") or "").strip()
-        )
+        return _normalize_report_evidences(results)
     except Exception:
-        return ""
+        return []
     finally:
         if session is not None:
             session.close()
+
+
+def _normalize_report_evidences(results: list[dict]) -> list[dict]:
+    evidences = []
+    for result in results:
+        content = str(result.get("content") or "").strip()
+        if not content:
+            continue
+
+        evidences.append(
+            {
+                "document_id": result.get("document_id"),
+                "chunk_index": result.get("chunk_index"),
+                "content": content,
+                "metadata": result.get("metadata") or {},
+                "scores": {
+                    "similarity": result.get("similarity_score"),
+                    "text": result.get("text_score"),
+                    "hybrid": result.get("hybrid_score"),
+                },
+                "rank": len(evidences) + 1,
+            }
+        )
+
+    return evidences
 
 
 def _build_embedding_search_query(query: str) -> str:

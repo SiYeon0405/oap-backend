@@ -1,8 +1,7 @@
 from sqlalchemy import Column, DateTime, Integer, text
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import declarative_base
 
-Base = declarative_base()
+from app.models.base import Base
 
 
 class AnalysisReport(Base):
