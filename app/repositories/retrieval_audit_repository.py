@@ -35,6 +35,7 @@ class RetrievalAuditRepository:
         ]
         if evidences:
             session.add_all(evidences)
+            session.flush()
 
         session.commit()
         session.refresh(retrieval_run)

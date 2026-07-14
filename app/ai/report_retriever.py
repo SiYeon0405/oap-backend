@@ -35,7 +35,7 @@ def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
         results = KnowledgeRetrievalService().retrieve(
             session=session,
             query=search_query,
-            top_k=3,
+            top_k=top_k,
         )
         return _normalize_report_evidences(results)
     except Exception:
