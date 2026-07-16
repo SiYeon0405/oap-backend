@@ -8,20 +8,52 @@ from openai import OpenAI
 
 from app.database.session import get_session
 from app.services.knowledge_retrieval_service import KnowledgeRetrievalService
+from app.services.retrieval_audit_service import RetrievalAuditService
 
 
 KNOWLEDGE_DIR = Path(__file__).resolve().parent / "knowledge"
 CACHE_PATH = KNOWLEDGE_DIR / ".cache" / "report_knowledge_embeddings.json"
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_CHUNK_LENGTH = 1200
+REPORT_RETRIEVAL_TOP_K = 3
 
 
 def retrieve_report_knowledge(query: str, top_k: int = 4) -> str:
     evidences = retrieve_report_evidences(query, top_k=top_k)
-    return "\n\n---\n\n".join(
-        evidence["content"]
-        for evidence in evidences
-    )
+    return _build_report_knowledge(evidences)
+
+
+def retrieve_report_knowledge_with_audit(
+    query: str,
+    analysis_request_id: int,
+    top_k: int = 4,
+) -> tuple[str, int | None]:
+    if not query.strip():
+        return "", None
+
+    session = get_session()
+    try:
+        search_query = _build_embedding_search_query(query)
+        results = KnowledgeRetrievalService().retrieve(
+            session=session,
+            query=search_query,
+            top_k=REPORT_RETRIEVAL_TOP_K,
+        )
+        evidences = _normalize_report_evidences(results)
+        retrieval_run = RetrievalAuditService().record_retrieval(
+            session=session,
+            analysis_request_id=analysis_request_id,
+            query=search_query,
+            evidences=evidences,
+            retrieval_method="vector",
+            top_k=REPORT_RETRIEVAL_TOP_K,
+        )
+        return _build_report_knowledge(evidences), retrieval_run.id
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
@@ -35,7 +67,7 @@ def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
         results = KnowledgeRetrievalService().retrieve(
             session=session,
             query=search_query,
-            top_k=3,
+            top_k=REPORT_RETRIEVAL_TOP_K,
         )
         return _normalize_report_evidences(results)
     except Exception:
@@ -43,6 +75,13 @@ def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
     finally:
         if session is not None:
             session.close()
+
+
+def _build_report_knowledge(evidences: list[dict]) -> str:
+    return "\n\n---\n\n".join(
+        evidence["content"]
+        for evidence in evidences
+    )
 
 
 def _normalize_report_evidences(results: list[dict]) -> list[dict]:

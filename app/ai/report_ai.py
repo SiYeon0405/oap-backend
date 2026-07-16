@@ -2,7 +2,10 @@ import json
 
 from openai import OpenAI
 
-from app.ai.report_retriever import retrieve_report_knowledge
+from app.ai.report_retriever import (
+    retrieve_report_knowledge,
+    retrieve_report_knowledge_with_audit,
+)
 
 
 REPORT_KEYS = (
@@ -22,7 +25,10 @@ def generate_analysis_report(
     interview_messages=None,
 ) -> dict[str, dict]:
     try:
-        response_text = _request_analysis_report(analysis_request, interview_messages)
+        response_text, _ = _request_analysis_report(
+            analysis_request,
+            interview_messages,
+        )
         report = json.loads(response_text)
         if _is_valid_report(report):
             return {key: report[key] for key in REPORT_KEYS}
@@ -32,21 +38,54 @@ def generate_analysis_report(
     return _generate_fallback_analysis_report(analysis_request)
 
 
-def _request_analysis_report(analysis_request, interview_messages=None) -> str:
+def generate_analysis_report_with_audit(
+    analysis_request,
+    interview_messages=None,
+) -> tuple[dict[str, dict], int | None]:
+    retrieval_run_id = None
+    try:
+        response_text, retrieval_run_id = _request_analysis_report(
+            analysis_request,
+            interview_messages,
+            analysis_request_id=getattr(analysis_request, "id", None),
+        )
+        report = json.loads(response_text)
+        if _is_valid_report(report):
+            return (
+                {key: report[key] for key in REPORT_KEYS},
+                retrieval_run_id,
+            )
+    except Exception:
+        raise
+
+    return _generate_fallback_analysis_report(analysis_request), retrieval_run_id
+
+
+def _request_analysis_report(
+    analysis_request,
+    interview_messages=None,
+    analysis_request_id: int | None = None,
+) -> tuple[str, int | None]:
     service_context = _build_service_context(analysis_request)
     user_answer_context = _build_user_answer_context(interview_messages)
     interview_context = _build_interview_context(interview_messages)
-    rag_context = retrieve_report_knowledge(
-        "\n".join(
-            [
-                str(service_context.get("service_name") or ""),
-                str(service_context.get("one_line_description") or ""),
-                str(service_context.get("industry") or ""),
-                str(service_context.get("main_question") or ""),
-                user_answer_context,
-            ]
-        )
+    retrieval_query = "\n".join(
+        [
+            str(service_context.get("service_name") or ""),
+            str(service_context.get("one_line_description") or ""),
+            str(service_context.get("industry") or ""),
+            str(service_context.get("main_question") or ""),
+            user_answer_context,
+        ]
     )
+    if analysis_request_id is None:
+        rag_context = retrieve_report_knowledge(retrieval_query)
+        retrieval_run_id = None
+    else:
+        rag_context, retrieval_run_id = retrieve_report_knowledge_with_audit(
+            retrieval_query,
+            analysis_request_id,
+        )
 
     client = OpenAI()
     response = client.responses.create(
@@ -140,7 +179,7 @@ def _request_analysis_report(analysis_request, interview_messages=None) -> str:
             },
         ],
     )
-    return response.output_text.strip()
+    return response.output_text.strip(), retrieval_run_id
 
 
 def _build_service_context(analysis_request) -> dict[str, str | None]:

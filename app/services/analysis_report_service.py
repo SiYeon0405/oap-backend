@@ -1,11 +1,12 @@
 from fastapi import HTTPException, status
 
-from app.ai.report_ai import generate_analysis_report
+from app.ai.report_ai import generate_analysis_report_with_audit
 from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
 from app.repositories.interview_message_repository import InterviewMessageRepository
 from app.schemas.analysis_report import AnalysisReportResponse, AnalysisStartResponse
+from app.services.retrieval_audit_service import RetrievalAuditService
 
 
 class AnalysisReportService:
@@ -13,10 +14,14 @@ class AnalysisReportService:
         self,
         repository: AnalysisReportRepository | None = None,
         interview_message_repository: InterviewMessageRepository | None = None,
+        retrieval_audit_service: RetrievalAuditService | None = None,
     ):
         self.repository = repository or AnalysisReportRepository()
         self.interview_message_repository = (
             interview_message_repository or InterviewMessageRepository()
+        )
+        self.retrieval_audit_service = (
+            retrieval_audit_service or RetrievalAuditService()
         )
 
     def start_analysis(self, request_id: int) -> AnalysisStartResponse:
@@ -56,7 +61,7 @@ class AnalysisReportService:
             except Exception:
                 interview_messages = None
 
-            report_payload = generate_analysis_report(
+            report_payload, retrieval_run_id = generate_analysis_report_with_audit(
                 analysis_request,
                 interview_messages,
             )
@@ -69,6 +74,18 @@ class AnalysisReportService:
                 analysis_request,
                 analysis_report,
             )
+            if retrieval_run_id is not None:
+                try:
+                    attached_run = self.retrieval_audit_service.attach_report(
+                        session,
+                        retrieval_run_id,
+                        analysis_report.id,
+                    )
+                    if attached_run is None:
+                        raise RuntimeError("retrieval run not found")
+                except Exception:
+                    session.rollback()
+                    raise
 
             return AnalysisStartResponse(
                 requestId=updated_request.id,
