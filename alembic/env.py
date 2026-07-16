@@ -4,10 +4,19 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+from app.core.config import get_settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+database_url = get_settings().database_url
+if not database_url:
+    raise RuntimeError("DATABASE_URL is not configured")
+
+# ConfigParser treats percent signs as interpolation markers. Preserve URL-encoded
+# credentials when passing DATABASE_URL through Alembic's configuration.
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

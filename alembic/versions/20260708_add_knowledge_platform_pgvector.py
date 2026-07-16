@@ -1,7 +1,7 @@
 """add knowledge platform pgvector tables
 
 Revision ID: 20260708_add_knowledge_platform_pgvector
-Revises:
+Revises: 20260707_analysis_core
 Create Date: 2026-07-08
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 
 
 revision = "20260708_kp_pgvector"
-down_revision = None
+down_revision = "20260707_analysis_core"
 branch_labels = None
 depends_on = None
 
