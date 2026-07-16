@@ -20,6 +20,12 @@ def get_engine():
     return _engine
 
 
+_SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=get_engine(),
+)
+
+
 def get_session():
-    session_local = sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
-    return session_local()
+    return _SessionLocal()
