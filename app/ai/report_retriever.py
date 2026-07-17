@@ -48,7 +48,19 @@ def retrieve_report_knowledge_with_audit(
             retrieval_method="vector",
             top_k=REPORT_RETRIEVAL_TOP_K,
         )
-        return _build_report_knowledge(evidences), retrieval_run.id
+        persisted_by_rank = {
+            getattr(evidence, "rank", None): getattr(evidence, "id", None)
+            for evidence in getattr(retrieval_run, "evidences", []) or []
+        }
+        evidences_with_ids = [
+            {
+                **evidence,
+                "retrieval_evidence_id": persisted_by_rank.get(evidence.get("rank")),
+            }
+            for evidence in evidences
+            if persisted_by_rank.get(evidence.get("rank")) is not None
+        ]
+        return _build_report_knowledge(evidences_with_ids), retrieval_run.id
     except Exception:
         session.rollback()
         raise
@@ -67,7 +79,7 @@ def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
         results = KnowledgeRetrievalService().retrieve(
             session=session,
             query=search_query,
-            top_k=REPORT_RETRIEVAL_TOP_K,
+            top_k=top_k,
         )
         return _normalize_report_evidences(results)
     except Exception:
@@ -79,7 +91,12 @@ def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
 
 def _build_report_knowledge(evidences: list[dict]) -> str:
     return "\n\n---\n\n".join(
-        evidence["content"]
+        (
+            f"[Evidence ID: {evidence['retrieval_evidence_id']}]\n"
+            f"{evidence['content']}"
+            if evidence.get("retrieval_evidence_id") is not None
+            else evidence["content"]
+        )
         for evidence in evidences
     )
 

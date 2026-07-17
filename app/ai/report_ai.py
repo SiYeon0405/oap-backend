@@ -23,68 +23,82 @@ MAX_INTERVIEW_MESSAGES = 20
 def generate_analysis_report(
     analysis_request,
     interview_messages=None,
+    evidence_context: str | None = None,
 ) -> dict[str, dict]:
+    report, _ = generate_analysis_report_with_citations(
+        analysis_request,
+        interview_messages,
+        evidence_context=evidence_context,
+    )
+    return report
+
+
+def generate_analysis_report_with_citations(
+    analysis_request,
+    interview_messages=None,
+    evidence_context: str | None = None,
+) -> tuple[dict[str, dict], dict[str, list[int]]]:
     try:
-        response_text, _ = _request_analysis_report(
+        response_text = _request_analysis_report(
             analysis_request,
             interview_messages,
+            evidence_context=evidence_context,
         )
         report = json.loads(response_text)
         if _is_valid_report(report):
-            return {key: report[key] for key in REPORT_KEYS}
+            return (
+                _strip_report_citations(report),
+                _extract_section_citations(report),
+            )
     except Exception:
-        pass
+        raise
 
-    return _generate_fallback_analysis_report(analysis_request)
+    return _generate_fallback_analysis_report(analysis_request), _empty_citations()
 
 
 def generate_analysis_report_with_audit(
     analysis_request,
     interview_messages=None,
 ) -> tuple[dict[str, dict], int | None]:
-    retrieval_run_id = None
-    try:
-        response_text, retrieval_run_id = _request_analysis_report(
-            analysis_request,
-            interview_messages,
-            analysis_request_id=getattr(analysis_request, "id", None),
-        )
-        report = json.loads(response_text)
-        if _is_valid_report(report):
-            return (
-                {key: report[key] for key in REPORT_KEYS},
-                retrieval_run_id,
-            )
-    except Exception:
-        raise
+    report, _, retrieval_run_id = generate_analysis_report_with_audit_and_citations(
+        analysis_request,
+        interview_messages,
+    )
+    return report, retrieval_run_id
 
-    return _generate_fallback_analysis_report(analysis_request), retrieval_run_id
+
+def generate_analysis_report_with_audit_and_citations(
+    analysis_request,
+    interview_messages=None,
+) -> tuple[dict[str, dict], dict[str, list[int]], int | None]:
+    retrieval_query = build_report_retrieval_query(
+        analysis_request,
+        interview_messages,
+    )
+    evidence_context, retrieval_run_id = retrieve_report_knowledge_with_audit(
+        retrieval_query,
+        getattr(analysis_request, "id", None),
+    )
+    report, citations = generate_analysis_report_with_citations(
+        analysis_request,
+        interview_messages,
+        evidence_context=evidence_context,
+    )
+    return report, citations, retrieval_run_id
 
 
 def _request_analysis_report(
     analysis_request,
     interview_messages=None,
-    analysis_request_id: int | None = None,
-) -> tuple[str, int | None]:
+    evidence_context: str | None = None,
+) -> str:
     service_context = _build_service_context(analysis_request)
     user_answer_context = _build_user_answer_context(interview_messages)
     interview_context = _build_interview_context(interview_messages)
-    retrieval_query = "\n".join(
-        [
-            str(service_context.get("service_name") or ""),
-            str(service_context.get("one_line_description") or ""),
-            str(service_context.get("industry") or ""),
-            str(service_context.get("main_question") or ""),
-            user_answer_context,
-        ]
-    )
-    if analysis_request_id is None:
-        rag_context = retrieve_report_knowledge(retrieval_query)
-        retrieval_run_id = None
-    else:
-        rag_context, retrieval_run_id = retrieve_report_knowledge_with_audit(
-            retrieval_query,
-            analysis_request_id,
+    rag_context = evidence_context
+    if rag_context is None:
+        rag_context = retrieve_report_knowledge(
+            build_report_retrieval_query(analysis_request, interview_messages)
         )
 
     client = OpenAI()
@@ -109,6 +123,14 @@ def _request_analysis_report(
                             "아래 Retrieved Knowledge는 3순위 보조 참고자료입니다. "
                             "사용자 정보가 부족한 경우에만 참고하고, 서비스 기본 정보나 인터뷰 답변과 충돌하면 "
                             "서비스 기본 정보와 인터뷰 답변을 우선하세요.\n\n"
+                            "Use the Evidence below as priority reference material, "
+                            "but do not state claims as certain when the Evidence does "
+                            "not support them. Use only the exact Evidence IDs shown "
+                            "below when returning section evidence_ids. Do not invent "
+                            "Evidence IDs. Sections based only on AI analysis or "
+                            "strategy may return an empty evidence_ids list. Keep the "
+                            "existing section fields and add evidence_ids as a list of "
+                            "integers inside each section object.\n\n"
                             f"{rag_context}"
                         ),
                     }
@@ -135,7 +157,9 @@ def _request_analysis_report(
                     "- platform_recommendation\n\n"
                     "각 key의 value는 반드시 object여야 합니다. "
                     "각 object에는 title, summary, insights, recommendations를 포함하세요. "
-                    "insights와 recommendations는 문자열 배열로 작성하세요."
+                    "insights와 recommendations는 문자열 배열로 작성하세요. "
+                    "각 object에는 evidence_ids도 포함할 수 있으며, 값은 위 Evidence ID 중 "
+                    "실제로 참고한 정수 ID 배열이어야 합니다."
                 ),
             },
             {
@@ -179,7 +203,116 @@ def _request_analysis_report(
             },
         ],
     )
-    return response.output_text.strip(), retrieval_run_id
+    return response.output_text.strip()
+
+
+def build_report_retrieval_query(analysis_request, interview_messages=None) -> str:
+    service_context = _build_service_context(analysis_request)
+    parts = [
+        ("service_name", service_context.get("service_name")),
+        ("service_description", service_context.get("one_line_description")),
+        ("industry_or_category", service_context.get("industry")),
+        ("analysis_purpose", service_context.get("main_question")),
+    ]
+    query_lines = [
+        f"{label}: {str(value).strip()}"
+        for label, value in parts
+        if str(value or "").strip()
+    ]
+
+    user_answers = _build_user_answers_for_query(interview_messages)
+    if user_answers:
+        query_lines.append(f"user_interview_answers: {user_answers}")
+
+    return "\n".join(query_lines)
+
+
+def build_report_evidence_context(evidences: list[dict]) -> str:
+    blocks = []
+    for index, evidence in enumerate(evidences, start=1):
+        content = str(evidence.get("content") or "").strip()
+        if not content:
+            continue
+
+        rank = evidence.get("rank") or index
+        evidence_id = evidence.get("retrieval_evidence_id")
+        source = _build_evidence_source(evidence)
+        label = (
+            f"[Evidence ID: {evidence_id}]"
+            if evidence_id is not None
+            else f"[Evidence {rank}]"
+        )
+        blocks.append(
+            "\n".join(
+                [
+                    label,
+                    f"출처: {source}",
+                    f"내용: {content}",
+                ]
+            )
+        )
+
+    return "\n\n".join(blocks)
+
+
+def _build_evidence_source(evidence: dict) -> str:
+    metadata = evidence.get("metadata") or {}
+    source_parts = []
+    if evidence.get("document_id") is not None:
+        source_parts.append(f"document_id={evidence.get('document_id')}")
+    if evidence.get("chunk_index") is not None:
+        source_parts.append(f"chunk_index={evidence.get('chunk_index')}")
+
+    for key in ("title", "source", "source_path", "domain", "category"):
+        value = metadata.get(key)
+        if value:
+            source_parts.append(f"{key}={value}")
+
+    scores = evidence.get("scores") or {}
+    score_parts = [
+        f"{key}={value:.4f}" if isinstance(value, float) else f"{key}={value}"
+        for key, value in scores.items()
+        if value is not None
+    ]
+    if score_parts:
+        source_parts.append(f"scores({', '.join(score_parts)})")
+
+    return ", ".join(source_parts) if source_parts else "unknown"
+
+
+def _strip_report_citations(report: dict) -> dict[str, dict]:
+    sanitized_report = {}
+    for key in REPORT_KEYS:
+        section = dict(report[key])
+        section.pop("evidence_ids", None)
+        sanitized_report[key] = section
+    return sanitized_report
+
+
+def _extract_section_citations(report: dict) -> dict[str, list[int]]:
+    citations = {}
+    for key in REPORT_KEYS:
+        evidence_ids = report.get(key, {}).get("evidence_ids", [])
+        citations[key] = _normalize_evidence_ids(evidence_ids)
+    return citations
+
+
+def _normalize_evidence_ids(value) -> list[int]:
+    if not isinstance(value, list):
+        return []
+
+    normalized_ids = []
+    seen = set()
+    for item in value:
+        if not isinstance(item, int) or item in seen:
+            continue
+        seen.add(item)
+        normalized_ids.append(item)
+    return normalized_ids
+
+
+def _empty_citations() -> dict[str, list[int]]:
+    return {key: [] for key in REPORT_KEYS}
 
 
 def _build_service_context(analysis_request) -> dict[str, str | None]:
@@ -227,6 +360,16 @@ def _build_interview_context(interview_messages) -> str:
         )
     except Exception:
         return "인터뷰 메시지를 사용할 수 없습니다."
+
+
+def _build_user_answers_for_query(interview_messages) -> str:
+    messages = _sort_interview_messages(interview_messages)
+    user_messages = [
+        _truncate_message_content(getattr(message, "content", ""))
+        for message in messages
+        if _is_user_message(message)
+    ]
+    return " ".join(message for message in user_messages if message)
 
 
 def _sort_interview_messages(interview_messages) -> list:
