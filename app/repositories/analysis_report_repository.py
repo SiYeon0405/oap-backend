@@ -52,9 +52,6 @@ class AnalysisReportRepository:
         analysis_request: AnalysisRequest,
         analysis_report: AnalysisReport,
     ) -> tuple[AnalysisRequest, AnalysisReport]:
-        analysis_request.status = "COMPLETED"
         session.add(analysis_report)
-        session.commit()
-        session.refresh(analysis_request)
-        session.refresh(analysis_report)
+        session.flush()
         return analysis_request, analysis_report

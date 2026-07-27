@@ -1,3 +1,6 @@
+from fastapi import HTTPException, status
+from sqlalchemy import select
+
 from app.database.session import get_session
 from app.models.analysis_request import AnalysisRequest
 from app.models.interview_message import InterviewMessage
@@ -15,8 +18,28 @@ class AnalysisRequestService:
         self.repository = repository or AnalysisRequestRepository()
         self.interview_repository = interview_repository or InterviewMessageRepository()
 
-    def create(self, request: AnalysisRequestCreate) -> AnalysisRequest:
+    @staticmethod
+    def get_owned_or_404(session, request_id: int, user_id: int) -> AnalysisRequest:
+        analysis_request = session.scalar(
+            select(AnalysisRequest).where(
+                AnalysisRequest.id == request_id,
+                AnalysisRequest.user_id == user_id,
+            )
+        )
+        if analysis_request is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="analysis request not found",
+            )
+        return analysis_request
+
+    def create(
+        self,
+        request: AnalysisRequestCreate,
+        user_id: int,
+    ) -> AnalysisRequest:
         analysis_request = AnalysisRequest(
+            user_id=user_id,
             service_name=request.serviceName,
             one_line_description=request.oneLineDescription,
             industry=request.industry,

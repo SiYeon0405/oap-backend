@@ -64,6 +64,11 @@ class AnalysisReportService:
                     detail="analysis request is not interviewing",
                 )
 
+            if analysis_request.status == "COMPLETED":
+                analysis_request.status = "INTERVIEWING"
+                session.commit()
+                session.refresh(analysis_request)
+
             try:
                 interview_messages = self.interview_message_repository.find_messages(
                     session,
@@ -72,49 +77,59 @@ class AnalysisReportService:
             except Exception:
                 interview_messages = None
 
-            retrieval_query = build_report_retrieval_query(
-                analysis_request,
-                interview_messages,
-            )
-            evidences = retrieve_report_evidences(retrieval_query, top_k=4)
-            retrieval_run = self._record_retrieval_audit(
-                session,
-                analysis_request_id=request_id,
-                query=retrieval_query,
-                evidences=evidences,
-                top_k=4,
-            )
-            evidences_with_ids = self._attach_retrieval_evidence_ids(
-                evidences,
-                retrieval_run,
-            )
-            evidence_context = build_report_evidence_context(evidences_with_ids)
-            report_payload, section_evidence_ids = generate_analysis_report_with_citations(
-                analysis_request,
-                interview_messages,
-                evidence_context=evidence_context,
-            )
-            analysis_report = AnalysisReport(
-                analysis_request_id=request_id,
-                **report_payload,
-            )
-            updated_request, saved_report = self.repository.start_analysis(
-                session,
-                analysis_request,
-                analysis_report,
-            )
-            if retrieval_run is not None:
-                self._attach_report_to_retrieval_run(
-                    session,
-                    retrieval_run_id=retrieval_run.id,
-                    analysis_report_id=saved_report.id,
+            try:
+                retrieval_query = build_report_retrieval_query(
+                    analysis_request,
+                    interview_messages,
                 )
-                self._save_report_citations(
+                evidences = retrieve_report_evidences(retrieval_query, top_k=4)
+                retrieval_run = self._record_retrieval_audit(
                     session,
-                    analysis_report_id=saved_report.id,
-                    retrieval_run_id=retrieval_run.id,
-                    section_evidence_ids=section_evidence_ids,
+                    analysis_request_id=request_id,
+                    query=retrieval_query,
+                    evidences=evidences,
+                    top_k=4,
                 )
+                evidences_with_ids = self._attach_retrieval_evidence_ids(
+                    evidences,
+                    retrieval_run,
+                )
+                evidence_context = build_report_evidence_context(evidences_with_ids)
+                report_payload, section_evidence_ids = (
+                    generate_analysis_report_with_citations(
+                        analysis_request,
+                        interview_messages,
+                        evidence_context=evidence_context,
+                    )
+                )
+                analysis_report = AnalysisReport(
+                    analysis_request_id=request_id,
+                    **report_payload,
+                )
+                updated_request, saved_report = self.repository.start_analysis(
+                    session,
+                    analysis_request,
+                    analysis_report,
+                )
+                if retrieval_run is not None:
+                    self._attach_report_to_retrieval_run(
+                        session,
+                        retrieval_run_id=retrieval_run.id,
+                        analysis_report_id=saved_report.id,
+                    )
+                    self._save_report_citations(
+                        session,
+                        analysis_report_id=saved_report.id,
+                        retrieval_run_id=retrieval_run.id,
+                        section_evidence_ids=section_evidence_ids,
+                    )
+
+                updated_request.status = "COMPLETED"
+                session.commit()
+                session.refresh(updated_request)
+            except Exception:
+                session.rollback()
+                raise
 
             return AnalysisStartResponse(
                 requestId=updated_request.id,
@@ -177,18 +192,14 @@ class AnalysisReportService:
         evidences: list[dict],
         top_k: int,
     ):
-        try:
-            return self.retrieval_audit_service.record_retrieval(
-                session,
-                analysis_request_id,
-                query,
-                evidences,
-                retrieval_method="vector",
-                top_k=top_k,
-            )
-        except Exception:
-            session.rollback()
-            return None
+        return self.retrieval_audit_service.record_retrieval(
+            session,
+            analysis_request_id,
+            query,
+            evidences,
+            retrieval_method="vector",
+            top_k=top_k,
+        )
 
     def _attach_report_to_retrieval_run(
         self,
@@ -197,14 +208,11 @@ class AnalysisReportService:
         retrieval_run_id: int,
         analysis_report_id: int,
     ) -> None:
-        try:
-            self.retrieval_audit_service.attach_report(
-                session,
-                retrieval_run_id,
-                analysis_report_id,
-            )
-        except Exception:
-            session.rollback()
+        self.retrieval_audit_service.attach_report(
+            session,
+            retrieval_run_id,
+            analysis_report_id,
+        )
 
     def _attach_retrieval_evidence_ids(
         self,
@@ -241,13 +249,10 @@ class AnalysisReportService:
         retrieval_run_id: int,
         section_evidence_ids: dict[str, list[int]],
     ) -> None:
-        try:
-            self.report_citation_service.save_report_citations(
-                session,
-                analysis_report_id=analysis_report_id,
-                retrieval_run_id=retrieval_run_id,
-                section_evidence_ids=section_evidence_ids,
-            )
-        except Exception:
-            session.rollback()
+        self.report_citation_service.save_report_citations(
+            session,
+            analysis_report_id=analysis_report_id,
+            retrieval_run_id=retrieval_run_id,
+            section_evidence_ids=section_evidence_ids,
+        )
 

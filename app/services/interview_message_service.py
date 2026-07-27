@@ -10,6 +10,7 @@ from app.schemas.interview_message import (
     InterviewMessageResponse,
     InterviewMessagesResponse,
 )
+from app.services.analysis_request_service import AnalysisRequestService
 from app.services.analysis_report_service import AnalysisReportService
 
 
@@ -17,14 +18,17 @@ class InterviewMessageService:
     def __init__(self, repository: InterviewMessageRepository | None = None):
         self.repository = repository or InterviewMessageRepository()
 
-    def get_interview(self, request_id: int) -> InterviewMessagesResponse:
+    def get_interview(
+        self,
+        request_id: int,
+        user_id: int,
+    ) -> InterviewMessagesResponse:
         with get_session() as session:
-            analysis_request = self.repository.find_analysis_request(session, request_id)
-            if analysis_request is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="analysis request not found",
-                )
+            analysis_request = AnalysisRequestService.get_owned_or_404(
+                session,
+                request_id,
+                user_id,
+            )
 
             messages = self.repository.find_messages(session, request_id)
 
@@ -41,14 +45,14 @@ class InterviewMessageService:
         self,
         request_id: int,
         request: InterviewAnswerRequest,
+        user_id: int,
     ) -> InterviewAnswerResponse:
         with get_session() as session:
-            analysis_request = self.repository.find_analysis_request(session, request_id)
-            if analysis_request is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="analysis request not found",
-                )
+            analysis_request = AnalysisRequestService.get_owned_or_404(
+                session,
+                request_id,
+                user_id,
+            )
             if (
                 analysis_request.status == "COMPLETED"
                 or analysis_request.interview_completed
@@ -72,17 +76,14 @@ class InterviewMessageService:
                 [message for message in messages if message.role == "USER"]
             )
             if user_answer_count >= 5:
-                analysis_request.status = "COMPLETED"
                 analysis_request.interview_completed = True
                 session.add(analysis_request)
                 session.commit()
-                status_value = analysis_request.status
-                interview_completed = analysis_request.interview_completed
-                AnalysisReportService().start_analysis(request_id)
+                analysis_result = AnalysisReportService().start_analysis(request_id)
                 return InterviewAnswerResponse(
                     nextQuestion="",
-                    status=status_value,
-                    interviewCompleted=interview_completed,
+                    status=analysis_result.status,
+                    interviewCompleted=True,
                 )
 
             next_question = generate_next_question(analysis_request, messages)
