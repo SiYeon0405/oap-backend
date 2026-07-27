@@ -83,7 +83,9 @@ def retrieve_report_evidences(query: str, top_k: int = 4) -> list[dict]:
         )
         return _normalize_report_evidences(results)
     except Exception:
-        return []
+        if session is not None:
+            session.rollback()
+        raise
     finally:
         if session is not None:
             session.close()

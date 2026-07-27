@@ -26,6 +26,7 @@ REPORT_PAYLOAD = {
 class FakeSession:
     def __init__(self):
         self.rollback_count = 0
+        self.commit_count = 0
 
     def __enter__(self):
         return self
@@ -35,6 +36,12 @@ class FakeSession:
 
     def rollback(self):
         self.rollback_count += 1
+
+    def commit(self):
+        self.commit_count += 1
+
+    def refresh(self, instance):
+        return None
 
 
 class FakeRepository:
@@ -236,11 +243,9 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
             response = service.start_analysis(101)
 
         self.assertEqual(response.model_dump(), {"requestId": 101, "status": "COMPLETED"})
-        self.assertEqual(len(audit_service.record_calls), 1)
-        record_args, _ = audit_service.record_calls[0]
-        self.assertEqual(record_args[3], [])
+        self.assertEqual(audit_service.record_calls, [])
         self.assertEqual(generate_mock.call_args.kwargs["evidence_context"], "")
-        self.assertEqual(len(audit_service.attach_calls), 1)
+        self.assertEqual(audit_service.attach_calls, [])
 
     def test_audit_exception_rolls_back_without_failing_report(self):
         session = FakeSession()
@@ -252,7 +257,7 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
             patch("app.services.analysis_report_service.get_session", return_value=session),
             patch(
                 "app.services.analysis_report_service.retrieve_report_evidences",
-                return_value=[],
+                return_value=[{"rank": 1, "content": "Evidence"}],
             ),
             patch(
                 "app.services.analysis_report_service.generate_analysis_report_with_citations",
@@ -275,7 +280,7 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
             patch("app.services.analysis_report_service.get_session", return_value=session),
             patch(
                 "app.services.analysis_report_service.retrieve_report_evidences",
-                return_value=[],
+                return_value=[{"rank": 1, "content": "Evidence"}],
             ),
             patch(
                 "app.services.analysis_report_service.generate_analysis_report_with_citations",

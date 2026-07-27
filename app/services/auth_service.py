@@ -28,6 +28,10 @@ class LoginResult:
 
 
 LEGACY_SYSTEM_EMAIL = "legacy-system@oap.internal"
+DEFAULT_JWT_ISSUER = "oap-backend"
+DEFAULT_JWT_AUDIENCE = "oap-web"
+DEFAULT_ACCESS_EXPIRE_MINUTES = 30
+DEFAULT_REFRESH_EXPIRE_DAYS = 14
 DUMMY_PASSWORD_HASH = bcrypt.hashpw(
     b"invalid-login-password",
     bcrypt.gensalt(),
@@ -93,7 +97,8 @@ class AuthService:
                 token_type="access",
                 expires_delta=timedelta(
                     minutes=self._get_positive_int_env(
-                        "JWT_ACCESS_EXPIRE_MINUTES"
+                        "JWT_ACCESS_EXPIRE_MINUTES",
+                        DEFAULT_ACCESS_EXPIRE_MINUTES,
                     )
                 ),
             )
@@ -101,7 +106,10 @@ class AuthService:
                 user.id,
                 token_type="refresh",
                 expires_delta=timedelta(
-                    days=self._get_positive_int_env("JWT_REFRESH_EXPIRE_DAYS")
+                    days=self._get_positive_int_env(
+                        "JWT_REFRESH_EXPIRE_DAYS",
+                        DEFAULT_REFRESH_EXPIRE_DAYS,
+                    )
                 ),
             )
             return LoginResult(
@@ -116,8 +124,14 @@ class AuthService:
                 access_token,
                 self._get_required_env("JWT_SECRET"),
                 algorithms=["HS256"],
-                issuer=self._get_required_env("JWT_ISSUER"),
-                audience=self._get_required_env("JWT_AUDIENCE"),
+                issuer=self._get_env_or_default(
+                    "JWT_ISSUER",
+                    DEFAULT_JWT_ISSUER,
+                ),
+                audience=self._get_env_or_default(
+                    "JWT_AUDIENCE",
+                    DEFAULT_JWT_AUDIENCE,
+                ),
                 options={
                     "require": ["sub", "iat", "exp", "iss", "aud", "token_type"]
                 },
@@ -157,8 +171,14 @@ class AuthService:
                 "sub": str(user_id),
                 "iat": now,
                 "exp": now + expires_delta,
-                "iss": self._get_required_env("JWT_ISSUER"),
-                "aud": self._get_required_env("JWT_AUDIENCE"),
+                "iss": self._get_env_or_default(
+                    "JWT_ISSUER",
+                    DEFAULT_JWT_ISSUER,
+                ),
+                "aud": self._get_env_or_default(
+                    "JWT_AUDIENCE",
+                    DEFAULT_JWT_AUDIENCE,
+                ),
                 "token_type": token_type,
             },
             self._get_required_env("JWT_SECRET"),
@@ -172,9 +192,16 @@ class AuthService:
             raise RuntimeError(f"{name} is not configured")
         return value
 
-    @classmethod
-    def _get_positive_int_env(cls, name: str) -> int:
-        value = cls._get_required_env(name)
+    @staticmethod
+    def _get_env_or_default(name: str, default: str) -> str:
+        value = os.getenv(name)
+        return value if value and value.strip() else default
+
+    @staticmethod
+    def _get_positive_int_env(name: str, default: int) -> int:
+        value = os.getenv(name)
+        if not value or not value.strip():
+            return default
         try:
             parsed_value = int(value)
         except ValueError as exc:

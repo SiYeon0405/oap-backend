@@ -83,12 +83,16 @@ class AnalysisReportService:
                     interview_messages,
                 )
                 evidences = retrieve_report_evidences(retrieval_query, top_k=4)
-                retrieval_run = self._record_retrieval_audit(
-                    session,
-                    analysis_request_id=request_id,
-                    query=retrieval_query,
-                    evidences=evidences,
-                    top_k=4,
+                retrieval_run = (
+                    self._record_retrieval_audit(
+                        session,
+                        analysis_request_id=request_id,
+                        query=retrieval_query,
+                        evidences=evidences,
+                        top_k=4,
+                    )
+                    if evidences
+                    else None
                 )
                 evidences_with_ids = self._attach_retrieval_evidence_ids(
                     evidences,
@@ -111,22 +115,23 @@ class AnalysisReportService:
                     analysis_request,
                     analysis_report,
                 )
-                if retrieval_run is not None:
-                    self._attach_report_to_retrieval_run(
-                        session,
-                        retrieval_run_id=retrieval_run.id,
-                        analysis_report_id=saved_report.id,
-                    )
-                    self._save_report_citations(
-                        session,
-                        analysis_report_id=saved_report.id,
-                        retrieval_run_id=retrieval_run.id,
-                        section_evidence_ids=section_evidence_ids,
-                    )
-
                 updated_request.status = "COMPLETED"
                 session.commit()
                 session.refresh(updated_request)
+
+                if retrieval_run is not None:
+                    attached = self._attach_report_to_retrieval_run(
+                        session,
+                        retrieval_run_id=retrieval_run.id,
+                        analysis_report_id=saved_report.id,
+                    )
+                    if attached:
+                        self._save_report_citations(
+                            session,
+                            analysis_report_id=saved_report.id,
+                            retrieval_run_id=retrieval_run.id,
+                            section_evidence_ids=section_evidence_ids,
+                        )
             except Exception:
                 session.rollback()
                 raise
@@ -192,14 +197,18 @@ class AnalysisReportService:
         evidences: list[dict],
         top_k: int,
     ):
-        return self.retrieval_audit_service.record_retrieval(
-            session,
-            analysis_request_id,
-            query,
-            evidences,
-            retrieval_method="vector",
-            top_k=top_k,
-        )
+        try:
+            return self.retrieval_audit_service.record_retrieval(
+                session,
+                analysis_request_id,
+                query,
+                evidences,
+                retrieval_method="vector",
+                top_k=top_k,
+            )
+        except Exception:
+            session.rollback()
+            return None
 
     def _attach_report_to_retrieval_run(
         self,
@@ -207,12 +216,17 @@ class AnalysisReportService:
         *,
         retrieval_run_id: int,
         analysis_report_id: int,
-    ) -> None:
-        self.retrieval_audit_service.attach_report(
-            session,
-            retrieval_run_id,
-            analysis_report_id,
-        )
+    ) -> bool:
+        try:
+            self.retrieval_audit_service.attach_report(
+                session,
+                retrieval_run_id,
+                analysis_report_id,
+            )
+            return True
+        except Exception:
+            session.rollback()
+            return False
 
     def _attach_retrieval_evidence_ids(
         self,
@@ -249,10 +263,13 @@ class AnalysisReportService:
         retrieval_run_id: int,
         section_evidence_ids: dict[str, list[int]],
     ) -> None:
-        self.report_citation_service.save_report_citations(
-            session,
-            analysis_report_id=analysis_report_id,
-            retrieval_run_id=retrieval_run_id,
-            section_evidence_ids=section_evidence_ids,
-        )
+        try:
+            self.report_citation_service.save_report_citations(
+                session,
+                analysis_report_id=analysis_report_id,
+                retrieval_run_id=retrieval_run_id,
+                section_evidence_ids=section_evidence_ids,
+            )
+        except Exception:
+            session.rollback()
 
