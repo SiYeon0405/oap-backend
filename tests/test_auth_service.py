@@ -23,6 +23,18 @@ class FakeSession:
     def scalar(self, statement):
         return self.user
 
+    def add(self, value):
+        self.added = value
+
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+    def refresh(self, value):
+        pass
+
 
 class AuthServiceJwtDefaultsTest(unittest.TestCase):
     def setUp(self):
