@@ -71,3 +71,18 @@ class LoginResponse(BaseModel):
     email: str
     name: str | None
     status: str
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str = Field(min_length=1, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 bytes")
+        return value
+
+
+class AuthActionResponse(BaseModel):
+    detail: str
