@@ -12,7 +12,7 @@ class AnalysisRequest(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(
         Integer,
-        ForeignKey("users.id", ondelete="RESTRICT"),
+        ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
     service_name = Column(String, nullable=False)
