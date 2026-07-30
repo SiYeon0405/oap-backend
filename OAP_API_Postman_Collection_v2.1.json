@@ -1,0 +1,612 @@
+{
+  "info": {
+    "_postman_id": "d67862d4-734f-4aad-af47-13aa49c90618",
+    "name": "OAP API v2.1",
+    "description": "JWT는 환경변수나 Authorization Header에 저장하지 않습니다. 로그인/refresh의 Set-Cookie를 Postman Cookie Jar가 관리합니다. HTTP localhost 또는 서버 IP에서는 Secure Cookie가 자동 전송되지 않을 수 있습니다. 분석 실행 전 인터뷰가 완료될 때까지 Interview Answer를 반복해야 할 수 있습니다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "description": "애플리케이션 상태를 확인합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('status payload is ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DB Health",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health/db",
+            "description": "PostgreSQL/Supabase 연결 상태를 확인합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('database is connected', () => pm.expect(pm.response.json().database).to.eql('connected'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 Auth",
+      "item": [
+        {
+          "name": "Signup A",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('emailA', `codex-postman-a-${Date.now()}@example.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('response has no tokens', () => { const body = pm.response.json(); pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailA}}\",\n  \"password\": \"{{passwordA}}\",\n  \"name\": \"Postman User A\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/signup",
+            "description": "인증 없이 사용자 A를 생성합니다. 토큰이나 Cookie를 발급하지 않습니다."
+          }
+        },
+        {
+          "name": "Login A",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('email is A', () => pm.expect(pm.response.json().email).to.eql(pm.environment.get('emailA')));",
+                  "pm.test('response has no tokens', () => { const body = pm.response.json(); pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailA}}\",\n  \"password\": \"{{passwordA}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "사용자 A로 로그인합니다. Set-Cookie는 Postman Cookie Jar에 저장됩니다."
+          }
+        },
+        {
+          "name": "Me A",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "description": "Access HttpOnly Cookie로 현재 사용자 A를 확인합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('me email is A', () => pm.expect(pm.response.json().email).to.eql(pm.environment.get('emailA')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh A",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "description": "Refresh HttpOnly Cookie로 rotation합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('response has no tokens', () => { const body = pm.response.json(); pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout A",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "url": "{{baseUrl}}/api/v1/auth/logout",
+            "description": "현재 A 기기의 token family를 폐기하고 Cookie를 삭제합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh A After Logout",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "description": "로그아웃 직후 refresh가 거부되는지 확인합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Signup B",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('emailB', `codex-postman-b-${Date.now()}@example.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('response has no tokens', () => { const body = pm.response.json(); pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"password\": \"{{passwordB}}\",\n  \"name\": \"Postman User B\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/signup",
+            "description": "인증 없이 소유권 검증용 사용자 B를 생성합니다."
+          }
+        },
+        {
+          "name": "Login B",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"password\": \"{{passwordB}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "사용자 B Cookie를 발급합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('email is B', () => pm.expect(pm.response.json().email).to.eql(pm.environment.get('emailB')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login A for Analysis",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailA}}\",\n  \"password\": \"{{passwordA}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "공유 Cookie Jar를 다시 A 세션으로 바꿉니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Analysis Requests",
+      "item": [
+        {
+          "name": "Create Analysis Request A",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceName\": \"OAP Postman Test\",\n  \"oneLineDescription\": \"API collection verification\",\n  \"industry\": \"SaaS\",\n  \"mainQuestion\": \"시장 진입 전략은?\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/analysis-requests",
+            "description": "Access HttpOnly Cookie가 필요하며 현재 사용자 A에게 자동 귀속됩니다. userId를 보내지 않습니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.environment.set('requestIdA', String(pm.response.json().requestId));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Interview",
+      "item": [
+        {
+          "name": "Get Interview A",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/analysis-requests/{{requestIdA}}/interview",
+            "description": "A의 Access HttpOnly Cookie로 인터뷰를 조회합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Answer Interview A",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answer\": \"Postman 테스트 사용자 답변\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/analysis-requests/{{requestIdA}}/interview",
+            "description": "A의 Access HttpOnly Cookie가 필요합니다. 인터뷰가 완료될 때까지 이 요청을 필요한 횟수만큼 반복합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Analysis",
+      "item": [
+        {
+          "name": "Run Analysis A",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/analysis-requests/{{requestIdA}}/analyze",
+            "description": "A의 Access HttpOnly Cookie로 분석을 실행합니다. 인터뷰 완료와 외부 AI 설정이 필요할 수 있습니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Report",
+      "item": [
+        {
+          "name": "Get Report A",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/analysis-requests/{{requestIdA}}/report",
+            "description": "A의 Access HttpOnly Cookie로 리포트를 조회합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Citations A",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/analysis-requests/{{requestIdA}}/report/citations",
+            "description": "A의 Access HttpOnly Cookie로 섹션별 참조 근거를 조회합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 Ownership Security",
+      "item": [
+        {
+          "name": "Login B for Ownership Check",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"password\": \"{{passwordB}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "Cookie Jar를 B 세션으로 바꿉니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "B Accesses A Request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/analysis-requests/{{requestIdA}}/interview",
+            "description": "B의 Access HttpOnly Cookie로 A의 requestId에 접근하면 소유권을 노출하지 않고 404를 반환해야 합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('ownership is hidden with 404', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 Account Deletion",
+      "item": [
+        {
+          "name": "Signup Delete User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('deleteEmail', `codex-postman-delete-${Date.now()}@example.com`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 201', () => pm.response.to.have.status(201));"]
+              }
+            }
+          ],
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{deleteEmail}}\",\n  \"password\": \"{{deletePassword}}\",\n  \"name\": \"Postman Delete User\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/signup",
+            "description": "회원 탈퇴 검증 전용 임시 사용자를 생성합니다."
+          }
+        },
+        {
+          "name": "Login Delete User",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [{"key": "Content-Type", "value": "application/json"}],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{deleteEmail}}\",\n  \"password\": \"{{deletePassword}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/login",
+            "description": "탈퇴 전용 사용자의 Cookie를 발급합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delete Current Account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Origin", "value": "http://localhost:3000"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"{{deletePassword}}\"\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "description": "Access HttpOnly Cookie의 현재 사용자만 비밀번호 확인 후 물리 삭제합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me After Account Deletion",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/me",
+            "description": "회원 탈퇴 후 Access HttpOnly Cookie 인증이 거부되는지 확인합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh After Account Deletion",
+          "request": {
+            "method": "POST",
+            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "url": "{{baseUrl}}/api/v1/auth/refresh",
+            "description": "회원 탈퇴 후 Refresh 인증이 거부되는지 확인합니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('status is 401', () => pm.response.to.have.status(401));"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
