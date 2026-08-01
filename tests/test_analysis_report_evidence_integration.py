@@ -56,7 +56,6 @@ class FakeRepository:
         return None
 
     def start_analysis(self, session, analysis_request, analysis_report):
-        analysis_request.status = "COMPLETED"
         analysis_report.id = 901
         self.saved_report = analysis_report
         return analysis_request, analysis_report
@@ -109,6 +108,22 @@ class FakeReportCitationService:
         if self.fail_save:
             raise RuntimeError("citation save failed")
         self.save_calls.append((args, kwargs))
+
+    def validate_section_evidence_ids(
+        self,
+        session,
+        *,
+        retrieval_run_id,
+        section_evidence_ids,
+    ):
+        return section_evidence_ids
+
+    def sanitize_report_evidence_ids(
+        self,
+        report_payload,
+        valid_section_evidence_ids,
+    ):
+        return report_payload
 
     def get_citations_by_analysis_request_id(self, session, analysis_request_id):
         return {key: [] for key in REPORT_PAYLOAD}
@@ -247,7 +262,7 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
         self.assertEqual(generate_mock.call_args.kwargs["evidence_context"], "")
         self.assertEqual(audit_service.attach_calls, [])
 
-    def test_audit_exception_rolls_back_without_failing_report(self):
+    def test_audit_exception_rolls_back_and_does_not_complete_report(self):
         session = FakeSession()
         request = make_request()
         audit_service = FakeRetrievalAuditService(fail_record=True)
@@ -264,13 +279,14 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
                 return_value=(REPORT_PAYLOAD, {}),
             ),
         ):
-            response = service.start_analysis(101)
+            with self.assertRaisesRegex(RuntimeError, "audit failed"):
+                service.start_analysis(101)
 
-        self.assertEqual(response.model_dump(), {"requestId": 101, "status": "COMPLETED"})
         self.assertEqual(session.rollback_count, 1)
         self.assertEqual(audit_service.attach_calls, [])
+        self.assertEqual(request.status, "INTERVIEWING")
 
-    def test_attach_exception_rolls_back_without_changing_response_contract(self):
+    def test_attach_exception_rolls_back_and_does_not_complete_report(self):
         session = FakeSession()
         request = make_request()
         audit_service = FakeRetrievalAuditService(fail_attach=True)
@@ -287,10 +303,11 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
                 return_value=(REPORT_PAYLOAD, {}),
             ),
         ):
-            response = service.start_analysis(101)
+            with self.assertRaisesRegex(RuntimeError, "attach failed"):
+                service.start_analysis(101)
 
-        self.assertEqual(response.model_dump(), {"requestId": 101, "status": "COMPLETED"})
         self.assertEqual(session.rollback_count, 1)
+        self.assertEqual(request.status, "INTERVIEWING")
 
     def test_get_report_citations_returns_section_keyed_response(self):
         session = FakeSession()

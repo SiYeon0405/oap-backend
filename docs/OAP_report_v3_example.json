@@ -1,0 +1,36 @@
+{
+  "serviceSummary": {"title": "서비스 요약", "summary": "구조 예시", "insights": [], "recommendations": []},
+  "marketAnalysis": {
+    "title": "시장 분석", "summary": "구조 예시", "insights": [], "recommendations": [],
+    "metrics": [{"key": "demand_signal", "label": "수요 신호", "value": 60, "unit": "score", "scale": {"min": 0, "max": 100}, "direction": "higher_is_better", "displayLevel": "medium", "displayText": "예시", "valueType": "estimated", "confidence": 0.6, "sampleSize": null, "evidenceIds": [501], "calculation": "정성 근거를 기반으로 한 AI 추정 예시", "asOf": null}],
+    "purchaseFactors": [{"id": "factor-1", "label": "가격", "score": 55, "mentionCount": null, "positiveMentionRate": null, "searchGrowthRate": null, "valueType": "estimated", "confidence": 0.5, "sampleSize": null, "evidenceIds": [501], "calculation": "정성 근거를 기반으로 한 AI 추정 예시", "asOf": null}],
+    "opportunityMatrix": {"xAxis": {"key": "demand", "label": "수요", "min": 0, "max": 100, "direction": "higher_is_better"}, "yAxis": {"key": "difficulty", "label": "진입 난이도", "min": 0, "max": 100, "direction": "lower_is_better"}, "points": [{"id": "point-1", "label": "예시 고객군", "x": 60, "y": 40, "size": 50, "sizeMeaning": "예시 크기", "segment": "example", "confidence": 0.5, "evidenceIds": [501]}]},
+    "demandTrend": {"interval": null, "unit": null, "series": [], "source": null, "asOf": null, "evidenceIds": []}
+  },
+  "competitorAnalysis": {
+    "title": "경쟁 분석", "summary": "구조 예시", "insights": [], "recommendations": [], "competitorCount": 2, "analyzedCopyCount": null,
+    "messageCoverage": [{"id": "message-1", "label": "간편함", "brandCount": 1, "brandRate": 0.5, "copyCount": null, "saturationScore": 50, "opportunityScore": 50, "competitorIds": ["competitor-1"], "confidence": 0.5, "evidenceIds": [501], "calculation": "예시 계산", "asOf": null}],
+    "competitors": [{"id": "competitor-1", "name": "예시 경쟁군", "website": null, "primaryMessages": ["간편함"], "activeChannels": ["네이버"], "priceRange": null, "messageSimilarityScore": 50, "channelIntensityScore": 40, "channelIntensityCalculation": "확인 채널 수를 이용한 예시 점수", "evidenceIds": [501]}]
+  },
+  "targetCustomerAnalysis": {
+    "title": "고객 분석", "summary": "구조 예시", "insights": [], "recommendations": [], "scoringModelVersion": "target-priority-v1.0",
+    "segments": [{"id": "segment-1", "rank": 1, "label": "예시 고객군", "priorityScore": 62, "problemFrequencyScore": 70, "purchaseIntentScore": 60, "reachabilityScore": 60, "priceSensitivityScore": 55, "estimatedShare": null, "jobs": [], "needs": [], "barriers": [], "preferredChannels": ["네이버"], "sampleSize": null, "valueType": "estimated", "confidence": 0.5, "evidenceIds": [501], "scoringModelVersion": "target-priority-v1.0"}]
+  },
+  "marketingStrategy": {
+    "title": "마케팅 전략", "summary": "구조 예시", "insights": [], "recommendations": [],
+    "executionPhases": [{"phase": "week-1", "order": 1, "label": "가설 설정", "goal": "메시지 반응 검증", "actions": ["콘텐츠 게시"], "deliverables": ["테스트 콘텐츠"], "channels": ["네이버"], "kpis": [{"key": "response_rate", "label": "반응률", "metric": "responses / views", "unit": "percent", "baseline": null, "target": 5, "targetOperator": ">=", "targetMin": null, "targetMax": null, "measurementWindow": "7 days", "minimumSampleSize": null, "decisionRule": "예시 기준 이상이면 다음 단계 진행", "source": "experiment", "calculation": "responses / views * 100", "targetBasis": "ai_estimated"}], "risks": [], "dependencies": [], "evidenceIds": [501]}],
+    "currentKpiValue": null, "targetAchievementRate": null, "previousReportDelta": null, "actualCampaignPerformance": null, "recommendationOutcomeGap": null
+  },
+  "platformRecommendation": {
+    "title": "플랫폼 추천", "summary": "구조 예시", "insights": [], "recommendations": [],
+    "rankedPlatforms": [{"priority_rank": 1, "platform": "네이버 블로그", "score": 60, "reason": "검색 의도 검증 예시", "customer_stage": "관심", "expected_effect": "검색 반응을 확인할 수 있을 것으로 예상", "low_budget_method": "주 1회 콘텐츠 실험", "caution": "성과 보장값이 아님", "confidence": 0.5, "evidenceIds": [501], "scoringModelVersion": "channel-fit-v1.0", "scoreBreakdown": {"audienceFit": 60, "contentFormatFit": 60, "costEfficiency": 60, "conversionIntent": 60, "executionFeasibility": 60}, "scoreWeights": {"audienceFit": 0.2, "contentFormatFit": 0.2, "costEfficiency": 0.2, "conversionIntent": 0.2, "executionFeasibility": 0.2}}],
+    "currentKpiValue": null, "targetAchievementRate": null, "previousReportDelta": null, "actualCampaignPerformance": null, "recommendationOutcomeGap": null
+  },
+  "reportMeta": {"schemaVersion": "3.0", "requestId": 123, "generatedAt": "2026-08-01T00:00:00Z", "dataAsOf": null, "overallConfidence": null, "evidenceCount": 1, "analysisLocale": "ko-KR"},
+  "headlineMetrics": [
+    {"key": "market_attractiveness", "label": "시장 매력도", "value": 60, "unit": "score", "scale": {"min": 0, "max": 100}, "direction": "higher_is_better", "displayLevel": "medium", "displayText": "예시", "valueType": "estimated", "confidence": 0.5, "sampleSize": null, "evidenceIds": [501], "calculation": "정성 근거를 기반으로 한 AI 추정 예시", "asOf": null},
+    {"key": "competitive_intensity", "label": "경쟁 강도", "value": 50, "unit": "score", "scale": {"min": 0, "max": 100}, "direction": "lower_is_better", "displayLevel": "medium", "displayText": "예시", "valueType": "estimated", "confidence": 0.5, "sampleSize": null, "evidenceIds": [501], "calculation": "정성 근거를 기반으로 한 AI 추정 예시", "asOf": null},
+    {"key": "target_clarity", "label": "타깃 명확도", "value": 55, "unit": "score", "scale": {"min": 0, "max": 100}, "direction": "higher_is_better", "displayLevel": "medium", "displayText": "예시", "valueType": "estimated", "confidence": 0.5, "sampleSize": null, "evidenceIds": [501], "calculation": "정성 근거를 기반으로 한 AI 추정 예시", "asOf": null},
+    {"key": "evidence_coverage", "label": "근거 커버리지", "value": 1, "unit": "count", "scale": null, "direction": "higher_is_better", "displayLevel": null, "displayText": null, "valueType": "observed", "confidence": 1, "sampleSize": null, "evidenceIds": [501], "calculation": "실제 report_citations 행 수", "asOf": null}
+  ]
+}

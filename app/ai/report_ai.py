@@ -5,6 +5,18 @@ from app.ai.report_retriever import (
     retrieve_report_knowledge,
     retrieve_report_knowledge_with_audit,
 )
+from app.schemas.analysis_report import (
+    AIAnalysisReportPayload,
+    CompetitorAnalysisSection,
+    MarketAnalysisSection,
+    MarketingStrategySection,
+    Metric,
+    KPI,
+    RankedPlatform,
+    PlatformRecommendationSection,
+    ReportSection,
+    TargetCustomerAnalysisSection,
+)
 
 
 REPORT_KEYS = (
@@ -15,6 +27,14 @@ REPORT_KEYS = (
     "marketing_strategy",
     "platform_recommendation",
 )
+SECTION_MODELS = {
+    "service_summary": ReportSection,
+    "market_analysis": MarketAnalysisSection,
+    "competitor_analysis": CompetitorAnalysisSection,
+    "target_customer_analysis": TargetCustomerAnalysisSection,
+    "marketing_strategy": MarketingStrategySection,
+    "platform_recommendation": PlatformRecommendationSection,
+}
 MAX_MESSAGE_CONTENT_LENGTH = 500
 MAX_INTERVIEW_MESSAGES = 20
 
@@ -45,12 +65,13 @@ def generate_analysis_report_with_citations(
         )
         report = json.loads(response_text)
         if _is_valid_report(report):
+            report = sanitize_report_payload(report)
             return (
                 _strip_report_citations(report),
                 _extract_section_citations(report),
             )
-    except Exception:
-        raise
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return _generate_fallback_analysis_report(analysis_request), _empty_citations()
 
     return _generate_fallback_analysis_report(analysis_request), _empty_citations()
 
@@ -103,6 +124,14 @@ def _request_analysis_report(
     client = get_openai_client()
     response = client.responses.create(
         model="gpt-4.1-mini",
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": "oap_report_v3",
+                "schema": AIAnalysisReportPayload.model_json_schema(),
+                "strict": False,
+            }
+        },
         input=[
             {
                 "role": "system",
@@ -129,7 +158,10 @@ def _request_analysis_report(
                             "Evidence IDs. Sections based only on AI analysis or "
                             "strategy may return an empty evidence_ids list. Keep the "
                             "existing section fields and add evidence_ids as a list of "
-                            "integers inside each section object.\n\n"
+                            "integers inside each section object. When a factual claim "
+                            "uses Retrieved Knowledge, the containing section and its "
+                            "related visualization item must include the exact supporting "
+                            "Evidence ID. Do not omit an ID for evidence you actually use.\n\n"
                             f"{rag_context}"
                         ),
                     }
@@ -147,18 +179,20 @@ def _request_analysis_report(
                     "정보 우선순위는 1순위 서비스 기본 정보, 2순위 사용자 인터뷰 답변, "
                     "3순위 Retrieved Knowledge입니다. Retrieved Knowledge는 사용자 정보가 부족할 때만 "
                     "보조 자료로 사용하세요.\n\n"
-                    "반환 JSON의 최상위 key는 반드시 다음 6개만 사용하세요:\n"
+                    "반환 JSON의 최상위 key는 다음 7개만 사용하세요:\n"
                     "- service_summary\n"
                     "- market_analysis\n"
                     "- competitor_analysis\n"
                     "- target_customer_analysis\n"
                     "- marketing_strategy\n"
-                    "- platform_recommendation\n\n"
-                    "각 key의 value는 반드시 object여야 합니다. "
-                    "각 object에는 title, summary, insights, recommendations를 포함하세요. "
+                    "- platform_recommendation\n"
+                    "- headlineMetrics\n\n"
+                    "headlineMetrics는 배열이고 나머지 6개 key의 value는 object여야 합니다. "
+                    "각 섹션 object에는 title, summary, insights, recommendations를 포함하세요. "
                     "insights와 recommendations는 문자열 배열로 작성하세요. "
                     "각 object에는 evidence_ids도 포함할 수 있으며, 값은 위 Evidence ID 중 "
-                    "실제로 참고한 정수 ID 배열이어야 합니다."
+                    "실제로 참고한 정수 ID 배열이어야 합니다. 기존 필드는 유지하면서 계약의 "
+                    "시각화 필드를 정확한 camelCase key로 추가하세요."
                 ),
             },
             {
@@ -198,6 +232,24 @@ def _request_analysis_report(
                     "- marketing_strategy에는 1개월, 2개월, 3개월 실행 로드맵을 포함하세요.\n"
                     "- 초기 창업자와 소규모 브랜드 기준의 저예산 실행 방안을 우선 작성하세요.\n"
                     "- 존재하지 않는 기업명을 단정하지 말고, 확실하지 않으면 '유사 서비스/대체재'로 표현하세요."
+                    "\n- score는 0~100 또는 null, confidence와 rate는 0~1 또는 null입니다."
+                    "\n- 근거 없는 숫자, sampleSize, dataAsOf, 백분위, URL, 시계열을 추측하지 마세요."
+                    "\n- 관측값은 observed, 공식 계산값은 derived, 정성 수치화는 estimated로 표시하세요."
+                    "\n- 정성 수치화 calculation에는 '정성 근거를 기반으로 한 AI 추정'을 포함하세요."
+                    "\n- 실제 추세 데이터가 없으면 series는 빈 배열로, 실제 캠페인 데이터가 없으면 P2 필드는 null로 반환하세요."
+                    "\n- competitive_intensity direction은 lower_is_better입니다."
+                    "\n- evidenceIds에는 제공된 Evidence ID만 사용하세요."
+                    "\n\n시각화 계약:\n"
+                    "- headlineMetrics: market_attractiveness, competitive_intensity, target_clarity만 생성하세요. evidence_coverage는 서버가 계산합니다.\n"
+                    "- market_analysis: metrics, purchaseFactors, opportunityMatrix, demandTrend를 추가하세요. 실제 기간 데이터가 없으면 demandTrend.series=[]입니다.\n"
+                    "- competitor_analysis: competitorCount, analyzedCopyCount, messageCoverage, competitors를 추가하세요. 실제 조사 count가 없으면 null입니다.\n"
+                    "- target_customer_analysis: segments와 scoringModelVersion=target-priority-v1.0을 추가하세요. 4개 하위 점수가 모두 있을 때만 명시된 가중식으로 priorityScore를 계산하세요.\n"
+                    "- marketing_strategy: executionPhases를 30일 내 순차 단계로 추가하고 KPI마다 calculation, measurementWindow, decisionRule을 포함하세요.\n"
+                    "- platform_recommendation: rankedPlatforms를 추가하고 scoringModelVersion=channel-fit-v1.0, 동일 scoreWeights와 scoreBreakdown을 사용하세요.\n"
+                    "- opportunityMatrix 좌표는 0~100 분석 점수이며 근거가 없으면 point를 만들지 마세요.\n"
+                    "- competitors의 website와 priceRange는 확인 가능한 근거가 없으면 null입니다.\n"
+                    "- currentKpiValue, targetAchievementRate, previousReportDelta, actualCampaignPerformance, recommendationOutcomeGap은 실제 연동 데이터가 없으면 null입니다.\n"
+                    "- 기존 recommendations의 타입과 내용을 바꾸지 마세요."
                 ),
             },
         ],
@@ -291,9 +343,22 @@ def _strip_report_citations(report: dict) -> dict[str, dict]:
 def _extract_section_citations(report: dict) -> dict[str, list[int]]:
     citations = {}
     for key in REPORT_KEYS:
-        evidence_ids = report.get(key, {}).get("evidence_ids", [])
-        citations[key] = _normalize_evidence_ids(evidence_ids)
+        citations[key] = _collect_evidence_ids(report.get(key, {}))
     return citations
+
+
+def _collect_evidence_ids(value) -> list[int]:
+    collected = []
+    if isinstance(value, dict):
+        collected.extend(_normalize_evidence_ids(value.get("evidenceIds", [])))
+        collected.extend(_normalize_evidence_ids(value.get("evidence_ids", [])))
+        for nested_key, nested_value in value.items():
+            if nested_key not in {"evidenceIds", "evidence_ids"}:
+                collected.extend(_collect_evidence_ids(nested_value))
+    elif isinstance(value, list):
+        for item in value:
+            collected.extend(_collect_evidence_ids(item))
+    return list(dict.fromkeys(collected))
 
 
 def _normalize_evidence_ids(value) -> list[int]:
@@ -312,6 +377,142 @@ def _normalize_evidence_ids(value) -> list[int]:
 
 def _empty_citations() -> dict[str, list[int]]:
     return {key: [] for key in REPORT_KEYS}
+
+
+def sanitize_report_payload(report: dict) -> dict[str, dict]:
+    sanitized = {}
+    for section_key, model in SECTION_MODELS.items():
+        raw_section = _normalize_ai_section(section_key, report.get(section_key, {}))
+        visual_fields = [
+            field_name
+            for field_name in model.model_fields
+            if field_name not in ReportSection.model_fields
+        ]
+        base_payload = {
+            key: value
+            for key, value in raw_section.items()
+            if key not in visual_fields
+        }
+        section = model.model_validate(ReportSection.model_validate(base_payload).model_dump())
+        accepted = section.model_dump(mode="json")
+        for field_name in visual_fields:
+            if field_name not in raw_section:
+                continue
+            candidate = {**accepted, field_name: raw_section[field_name]}
+            try:
+                section = model.model_validate(candidate)
+            except ValueError:
+                continue
+            accepted = section.model_dump(mode="json")
+        sanitized[section_key] = accepted
+    headline_metrics = []
+    for raw_metric in report.get("headlineMetrics", []):
+        try:
+            headline_metrics.append(Metric.model_validate(raw_metric).model_dump(mode="json"))
+        except ValueError:
+            continue
+    sanitized["headline_metrics"] = headline_metrics
+    return sanitized
+
+
+def _normalize_ai_section(section_key: str, raw_section: dict) -> dict:
+    section = dict(raw_section) if isinstance(raw_section, dict) else {}
+    if section_key == "target_customer_analysis":
+        version = section.get("scoringModelVersion") or "target-priority-v1.0"
+        normalized_segments = []
+        for index, raw_segment in enumerate(section.get("segments") or []):
+            if not isinstance(raw_segment, dict):
+                continue
+            segment = dict(raw_segment)
+            segment["scoringModelVersion"] = version
+            components = [
+                segment.get("problemFrequencyScore"),
+                segment.get("purchaseIntentScore"),
+                segment.get("reachabilityScore"),
+                segment.get("priceSensitivityScore"),
+            ]
+            if all(isinstance(value, (int, float)) for value in components):
+                segment["priorityScore"] = (
+                    components[0] * 0.35
+                    + components[1] * 0.35
+                    + components[2] * 0.20
+                    + (100 - components[3]) * 0.10
+                )
+            segment["_inputOrder"] = index
+            normalized_segments.append(segment)
+        normalized_segments = [
+            item for item in normalized_segments if item.get("priorityScore") is not None
+        ]
+        normalized_segments.sort(
+            key=lambda item: (-item["priorityScore"], item["_inputOrder"])
+        )
+        for rank, segment in enumerate(normalized_segments, start=1):
+            segment["rank"] = rank
+            segment.pop("_inputOrder", None)
+        section["segments"] = normalized_segments
+        section["scoringModelVersion"] = version
+    elif section_key == "marketing_strategy":
+        phases = []
+        for raw_phase in section.get("executionPhases") or []:
+            if not isinstance(raw_phase, dict):
+                continue
+            phase = dict(raw_phase)
+            valid_kpis = []
+            for raw_kpi in phase.get("kpis") or []:
+                try:
+                    valid_kpis.append(KPI.model_validate(raw_kpi).model_dump(mode="json"))
+                except ValueError:
+                    continue
+            phase["kpis"] = valid_kpis
+            phases.append(phase)
+        section["executionPhases"] = phases
+    elif section_key == "platform_recommendation":
+        version = section.get("scoringModelVersion") or "channel-fit-v1.0"
+        normalized_platforms = []
+        for index, raw_platform in enumerate(section.get("rankedPlatforms") or []):
+            if not isinstance(raw_platform, dict):
+                continue
+            platform = dict(raw_platform)
+            platform["scoringModelVersion"] = version
+            breakdown = platform.get("scoreBreakdown")
+            weights = platform.get("scoreWeights")
+            if isinstance(breakdown, dict) and isinstance(weights, dict):
+                keys = (
+                    "audienceFit",
+                    "contentFormatFit",
+                    "costEfficiency",
+                    "conversionIntent",
+                    "executionFeasibility",
+                )
+                if all(isinstance(breakdown.get(key), (int, float)) for key in keys) and all(
+                    isinstance(weights.get(key), (int, float)) for key in keys
+                ):
+                    platform["score"] = sum(
+                        breakdown[key] * weights[key] for key in keys
+                    )
+            platform["_inputOrder"] = index
+            try:
+                validated = RankedPlatform.model_validate(platform).model_dump(mode="json")
+            except ValueError:
+                platform.pop("scoreBreakdown", None)
+                platform.pop("scoreWeights", None)
+                try:
+                    validated = RankedPlatform.model_validate(platform).model_dump(mode="json")
+                except ValueError:
+                    continue
+            validated["_inputOrder"] = index
+            normalized_platforms.append(validated)
+        normalized_platforms = [
+            item for item in normalized_platforms if item.get("score") is not None
+        ]
+        normalized_platforms.sort(
+            key=lambda item: (-item["score"], item["_inputOrder"])
+        )
+        for rank, platform in enumerate(normalized_platforms, start=1):
+            platform["priority_rank"] = rank
+            platform.pop("_inputOrder", None)
+        section["rankedPlatforms"] = normalized_platforms
+    return section
 
 
 def _build_service_context(analysis_request) -> dict[str, str | None]:

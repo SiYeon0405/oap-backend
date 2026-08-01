@@ -29,7 +29,7 @@ class ReportCitationRepository:
         if citations:
             session.add_all(citations)
 
-        session.commit()
+        session.flush()
         return citations
 
     def find_by_analysis_request_id(

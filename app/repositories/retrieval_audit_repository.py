@@ -37,8 +37,6 @@ class RetrievalAuditRepository:
             session.add_all(evidences)
             session.flush()
 
-        session.commit()
-        session.refresh(retrieval_run)
         return retrieval_run
 
     def attach_report(
@@ -52,8 +50,7 @@ class RetrievalAuditRepository:
             return None
 
         retrieval_run.analysis_report_id = analysis_report_id
-        session.commit()
-        session.refresh(retrieval_run)
+        session.flush()
         return retrieval_run
 
     def find_runs_by_analysis_request_id(

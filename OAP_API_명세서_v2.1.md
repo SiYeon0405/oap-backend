@@ -292,14 +292,26 @@
 
 ```json
 {
-  "serviceSummary": {},
-  "marketAnalysis": {},
-  "competitorAnalysis": {},
-  "targetCustomerAnalysis": {},
-  "marketingStrategy": {},
-  "platformRecommendation": {}
+  "serviceSummary": {"title": "서비스 요약", "summary": "...", "insights": [], "recommendations": []},
+  "marketAnalysis": {"title": "시장 분석", "summary": "...", "insights": [], "recommendations": [], "metrics": [], "purchaseFactors": [], "opportunityMatrix": null, "demandTrend": null},
+  "competitorAnalysis": {"title": "경쟁 분석", "summary": "...", "insights": [], "recommendations": [], "competitorCount": null, "analyzedCopyCount": null, "messageCoverage": [], "competitors": []},
+  "targetCustomerAnalysis": {"title": "고객 분석", "summary": "...", "insights": [], "recommendations": [], "segments": [], "scoringModelVersion": null},
+  "marketingStrategy": {"title": "마케팅 전략", "summary": "...", "insights": [], "recommendations": [], "executionPhases": [], "currentKpiValue": null, "targetAchievementRate": null, "previousReportDelta": null, "actualCampaignPerformance": null, "recommendationOutcomeGap": null},
+  "platformRecommendation": {"title": "플랫폼 추천", "summary": "...", "insights": [], "recommendations": [], "rankedPlatforms": [], "currentKpiValue": null, "targetAchievementRate": null, "previousReportDelta": null, "actualCampaignPerformance": null, "recommendationOutcomeGap": null},
+  "reportMeta": {"schemaVersion": "3.0", "requestId": 123, "generatedAt": "2026-08-01T00:00:00Z", "dataAsOf": null, "overallConfidence": null, "evidenceCount": 0, "analysisLocale": "ko-KR"},
+  "headlineMetrics": [
+    {"key": "market_attractiveness", "label": "시장 매력도", "value": null, "unit": "score", "scale": null, "direction": "higher_is_better", "displayLevel": null, "displayText": null, "valueType": "estimated", "confidence": null, "sampleSize": null, "evidenceIds": [], "calculation": null, "asOf": null},
+    {"key": "competitive_intensity", "label": "경쟁 강도", "value": null, "unit": "score", "scale": null, "direction": "lower_is_better", "displayLevel": null, "displayText": null, "valueType": "estimated", "confidence": null, "sampleSize": null, "evidenceIds": [], "calculation": null, "asOf": null},
+    {"key": "target_clarity", "label": "타깃 명확도", "value": null, "unit": "score", "scale": null, "direction": "higher_is_better", "displayLevel": null, "displayText": null, "valueType": "estimated", "confidence": null, "sampleSize": null, "evidenceIds": [], "calculation": null, "asOf": null},
+    {"key": "evidence_coverage", "label": "근거 커버리지", "value": 0, "unit": "count", "scale": null, "direction": "higher_is_better", "displayLevel": null, "displayText": null, "valueType": "observed", "confidence": 1, "sampleSize": null, "evidenceIds": [], "calculation": "실제 report_citations 행 수", "asOf": null}
+  ]
 }
 ```
+
+위 숫자와 ID는 응답 형태를 설명하기 위한 예시이며 운영 성과 보장값이 아니다.
+`score`는 `0~100`, confidence/rate는 `0~1`, 근거 없는 값은 `null`이다.
+Legacy 데이터는 기존 텍스트를 유지하고 `schemaVersion="2.1-legacy"`, 신규 배열 `[]`, 신규 단일값 `null`로 반환한다.
+전체 시각화 계약은 `docs/OAP_report_visual_metrics_backend_contract.md`를 따른다.
 
 ### GET /api/v1/analysis-requests/{requestId}/report/citations
 

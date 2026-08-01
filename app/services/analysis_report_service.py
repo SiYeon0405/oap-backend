@@ -106,6 +106,24 @@ class AnalysisReportService:
                         evidence_context=evidence_context,
                     )
                 )
+                headline_metrics = report_payload.pop("headline_metrics", [])
+                valid_section_evidence_ids = (
+                    self.report_citation_service.validate_section_evidence_ids(
+                        session,
+                        retrieval_run_id=retrieval_run.id,
+                        section_evidence_ids=section_evidence_ids,
+                    )
+                    if retrieval_run is not None
+                    else {key: [] for key in section_evidence_ids}
+                )
+                self.report_citation_service.sanitize_report_evidence_ids(
+                    report_payload,
+                    valid_section_evidence_ids,
+                )
+                report_payload["service_summary"]["_schemaVersion"] = "3.0"
+                report_payload["service_summary"]["_headlineMetrics"] = (
+                    headline_metrics
+                )
                 analysis_report = AnalysisReport(
                     analysis_request_id=request_id,
                     **report_payload,
@@ -115,23 +133,22 @@ class AnalysisReportService:
                     analysis_request,
                     analysis_report,
                 )
+
+                if retrieval_run is not None:
+                    self.retrieval_audit_service.attach_report(
+                        session,
+                        retrieval_run.id,
+                        saved_report.id,
+                    )
+                    self.report_citation_service.save_report_citations(
+                        session,
+                        analysis_report_id=saved_report.id,
+                        retrieval_run_id=retrieval_run.id,
+                        section_evidence_ids=valid_section_evidence_ids,
+                    )
                 updated_request.status = "COMPLETED"
                 session.commit()
                 session.refresh(updated_request)
-
-                if retrieval_run is not None:
-                    attached = self._attach_report_to_retrieval_run(
-                        session,
-                        retrieval_run_id=retrieval_run.id,
-                        analysis_report_id=saved_report.id,
-                    )
-                    if attached:
-                        self._save_report_citations(
-                            session,
-                            analysis_report_id=saved_report.id,
-                            retrieval_run_id=retrieval_run.id,
-                            section_evidence_ids=section_evidence_ids,
-                        )
             except Exception:
                 session.rollback()
                 raise
@@ -157,13 +174,61 @@ class AnalysisReportService:
                     detail="analysis report not found",
                 )
 
+            citations = self.report_citation_service.get_citations_by_analysis_request_id(
+                session,
+                request_id,
+            )
+            evidence_count = sum(len(items) for items in citations.values())
+            valid_ids_by_section = {
+                section_key: [item["evidence_id"] for item in items]
+                for section_key, items in citations.items()
+            }
+            sections = {
+                "service_summary": dict(report.service_summary or {}),
+                "market_analysis": dict(report.market_analysis or {}),
+                "competitor_analysis": dict(report.competitor_analysis or {}),
+                "target_customer_analysis": dict(report.target_customer_analysis or {}),
+                "marketing_strategy": dict(report.marketing_strategy or {}),
+                "platform_recommendation": dict(report.platform_recommendation or {}),
+            }
+            schema_version = sections["service_summary"].pop(
+                "_schemaVersion",
+                "2.1-legacy",
+            )
+            stored_headline_metrics = sections["service_summary"].pop(
+                "_headlineMetrics",
+                [],
+            )
+            self.report_citation_service.sanitize_report_evidence_ids(
+                sections,
+                valid_ids_by_section,
+            )
+            headline_metrics = (
+                self._build_headline_metrics(
+                    stored_headline_metrics,
+                    evidence_count,
+                    valid_ids_by_section,
+                )
+                if schema_version == "3.0"
+                else []
+            )
             return AnalysisReportResponse(
-                serviceSummary=report.service_summary,
-                marketAnalysis=report.market_analysis,
-                competitorAnalysis=report.competitor_analysis,
-                targetCustomerAnalysis=report.target_customer_analysis,
-                marketingStrategy=report.marketing_strategy,
-                platformRecommendation=report.platform_recommendation,
+                serviceSummary=sections["service_summary"],
+                marketAnalysis=sections["market_analysis"],
+                competitorAnalysis=sections["competitor_analysis"],
+                targetCustomerAnalysis=sections["target_customer_analysis"],
+                marketingStrategy=sections["marketing_strategy"],
+                platformRecommendation=sections["platform_recommendation"],
+                reportMeta={
+                    "schemaVersion": schema_version,
+                    "requestId": request_id,
+                    "generatedAt": report.created_at,
+                    "dataAsOf": None,
+                    "overallConfidence": None,
+                    "evidenceCount": evidence_count,
+                    "analysisLocale": "ko-KR",
+                },
+                headlineMetrics=headline_metrics,
             )
 
     def get_report_citations(self, request_id: int) -> ReportCitationsResponse:
@@ -197,36 +262,14 @@ class AnalysisReportService:
         evidences: list[dict],
         top_k: int,
     ):
-        try:
-            return self.retrieval_audit_service.record_retrieval(
-                session,
-                analysis_request_id,
-                query,
-                evidences,
-                retrieval_method="vector",
-                top_k=top_k,
-            )
-        except Exception:
-            session.rollback()
-            return None
-
-    def _attach_report_to_retrieval_run(
-        self,
-        session,
-        *,
-        retrieval_run_id: int,
-        analysis_report_id: int,
-    ) -> bool:
-        try:
-            self.retrieval_audit_service.attach_report(
-                session,
-                retrieval_run_id,
-                analysis_report_id,
-            )
-            return True
-        except Exception:
-            session.rollback()
-            return False
+        return self.retrieval_audit_service.record_retrieval(
+            session,
+            analysis_request_id,
+            query,
+            evidences,
+            retrieval_method="vector",
+            top_k=top_k,
+        )
 
     def _attach_retrieval_evidence_ids(
         self,
@@ -255,21 +298,80 @@ class AnalysisReportService:
             )
         return evidences_with_ids
 
-    def _save_report_citations(
-        self,
-        session,
-        *,
-        analysis_report_id: int,
-        retrieval_run_id: int,
-        section_evidence_ids: dict[str, list[int]],
-    ) -> None:
-        try:
-            self.report_citation_service.save_report_citations(
-                session,
-                analysis_report_id=analysis_report_id,
-                retrieval_run_id=retrieval_run_id,
-                section_evidence_ids=section_evidence_ids,
+    @staticmethod
+    def _build_headline_metrics(
+        stored_metrics: list[dict],
+        evidence_count: int,
+        valid_ids_by_section: dict[str, list[int]],
+    ) -> list[dict]:
+        required = {
+            "market_attractiveness": {
+                "label": "시장 매력도",
+                "direction": "higher_is_better",
+            },
+            "competitive_intensity": {
+                "label": "경쟁 강도",
+                "direction": "lower_is_better",
+            },
+            "target_clarity": {
+                "label": "타깃 명확도",
+                "direction": "higher_is_better",
+            },
+        }
+        stored_by_key = {
+            metric.get("key"): metric
+            for metric in stored_metrics
+            if isinstance(metric, dict) and metric.get("key") in required
+        }
+        all_evidence_ids = list(
+            dict.fromkeys(
+                evidence_id
+                for ids in valid_ids_by_section.values()
+                for evidence_id in ids
             )
-        except Exception:
-            session.rollback()
+        )
+        allowed_evidence_ids = set(all_evidence_ids)
+        result = []
+        for key, contract in required.items():
+            metric = dict(stored_by_key.get(key) or {})
+            original_evidence_ids = metric.get("evidenceIds", [])
+            valid_evidence_ids = [
+                evidence_id
+                for evidence_id in dict.fromkeys(original_evidence_ids)
+                if evidence_id in allowed_evidence_ids
+            ]
+            metric.update(
+                {
+                    "key": key,
+                    "label": metric.get("label") or contract["label"],
+                    "value": metric.get("value"),
+                    "unit": "score",
+                    "direction": contract["direction"],
+                    "valueType": metric.get("valueType") or "estimated",
+                    "evidenceIds": valid_evidence_ids,
+                }
+            )
+            if original_evidence_ids and not valid_evidence_ids:
+                metric["value"] = None
+            result.append(metric)
+
+        result.append(
+            {
+                "key": "evidence_coverage",
+                "label": "근거 커버리지",
+                "value": evidence_count,
+                "unit": "count",
+                "scale": None,
+                "direction": "higher_is_better",
+                "displayLevel": None,
+                "displayText": None,
+                "valueType": "observed",
+                "confidence": 1,
+                "sampleSize": None,
+                "evidenceIds": all_evidence_ids,
+                "calculation": "실제 report_citations 행 수",
+                "asOf": None,
+            }
+        )
+        return result
 

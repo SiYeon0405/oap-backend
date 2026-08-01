@@ -136,3 +136,17 @@ Knowledge 데이터는 유지되며 동일 이메일 재가입이 가능하다.
   수정하고 HTTPS 환경에서 재검증해야 한다.
 - HTTP localhost 또는 서버 IP에서는 Postman과 브라우저가 Secure Cookie를
   전송하지 않아 인증이 실패할 수 있다.
+
+## Report schemaVersion 3.0 렌더링
+
+- 기존 6개 섹션의 `title`, `summary`, `insights`, `recommendations`를 항상 텍스트 fallback으로 유지한다.
+- `headlineMetrics`는 상단 카드로 표시하되 `value=null`이면 숫자를 만들지 말고 `displayText` 또는 기존 요약을 사용한다.
+- `direction=lower_is_better`인 경쟁 강도는 낮은 값을 긍정적으로 표시한다.
+- `valueType`과 `confidence`를 함께 표시해 observed/derived/estimated를 구분한다.
+- `marketAnalysis.purchaseFactors`, `competitorAnalysis.messageCoverage`, `targetCustomerAnalysis.segments`, `marketingStrategy.executionPhases`, `platformRecommendation.rankedPlatforms`가 비어 있으면 해당 차트를 숨긴다.
+- P1 `opportunityMatrix`, `demandTrend`, `competitors`, `scoreBreakdown`이 없거나 비어 있으면 차트를 숨기며 임의 데이터를 만들지 않는다.
+- P2 필드가 `null`이면 실제 성과 연동 전 상태이므로 달성률이나 성과를 표시하지 않는다.
+- `evidenceIds`는 citations API의 `evidence_id`와 연결해 근거 툴팁을 표시한다.
+- `expected_effect`는 예상 가설이며 보장된 효과로 표현하지 않는다.
+- Legacy `schemaVersion=2.1-legacy`는 기존 텍스트 중심 화면으로 표시한다.
+- 동일 점수의 고객군·플랫폼은 API 입력 순서를 유지하는 안정 정렬을 전제로 한다.

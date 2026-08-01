@@ -1,5 +1,10 @@
+import logging
+
 from app.ai.report_ai import REPORT_KEYS
 from app.repositories.report_citation_repository import ReportCitationRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class ReportCitationService:
@@ -61,7 +66,71 @@ class ReportCitationService:
                 valid_ids.append(evidence_id)
             result[section_key] = valid_ids
 
+        removed_count = len(set(candidate_ids)) - len(allowed_ids)
+        if removed_count:
+            logger.warning(
+                "Removed invalid report evidence IDs count=%s",
+                removed_count,
+            )
+
         return result
+
+    def sanitize_report_evidence_ids(
+        self,
+        report_payload: dict,
+        valid_section_evidence_ids: dict[str, list[int]],
+    ) -> dict:
+        for section_key in REPORT_KEYS:
+            self._sanitize_nested_evidence(
+                report_payload.get(section_key),
+                set(valid_section_evidence_ids.get(section_key, [])),
+            )
+        return report_payload
+
+    def _sanitize_nested_evidence(self, value, allowed_ids: set[int]) -> None:
+        if isinstance(value, dict):
+            for key in ("evidenceIds", "evidence_ids"):
+                if key not in value:
+                    continue
+                original = value.get(key) if isinstance(value.get(key), list) else []
+                valid = [
+                    evidence_id
+                    for evidence_id in dict.fromkeys(original)
+                    if isinstance(evidence_id, int) and evidence_id in allowed_ids
+                ]
+                if len(valid) != len(original):
+                    logger.warning(
+                        "Removed invalid nested evidence IDs count=%s",
+                        len(original) - len(valid),
+                    )
+                value[key] = valid
+                if original and not valid:
+                    self._null_unsubstantiated_observed_values(value)
+            for nested_key, nested_value in value.items():
+                if nested_key not in {"evidenceIds", "evidence_ids"}:
+                    self._sanitize_nested_evidence(nested_value, allowed_ids)
+        elif isinstance(value, list):
+            for item in value:
+                self._sanitize_nested_evidence(item, allowed_ids)
+
+    @staticmethod
+    def _null_unsubstantiated_observed_values(value: dict) -> None:
+        if value.get("valueType") != "observed":
+            return
+        for key in (
+            "value",
+            "score",
+            "mentionCount",
+            "positiveMentionRate",
+            "searchGrowthRate",
+            "brandCount",
+            "brandRate",
+            "copyCount",
+            "saturationScore",
+            "opportunityScore",
+        ):
+            if key in value:
+                value[key] = None
 
     def get_citations_by_analysis_request_id(
         self,

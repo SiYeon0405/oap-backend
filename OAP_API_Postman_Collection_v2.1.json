@@ -289,7 +289,15 @@
               "listen": "test",
               "script": {
                 "type": "text/javascript",
-                "exec": ["pm.test('status is 200', () => pm.response.to.have.status(200));"]
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('reportMeta exists', () => pm.expect(body.reportMeta).to.be.an('object'));",
+                  "pm.test('legacy sections remain', () => ['serviceSummary','marketAnalysis','competitorAnalysis','targetCustomerAnalysis','marketingStrategy','platformRecommendation'].forEach(k => pm.expect(body).to.have.property(k)));",
+                  "pm.test('headlineMetrics is array', () => pm.expect(body.headlineMetrics).to.be.an('array'));",
+                  "pm.test('evidenceCount is number', () => pm.expect(body.reportMeta.evidenceCount).to.be.a('number'));",
+                  "pm.test('token fields are absent', () => pm.expect(JSON.stringify(body).toLowerCase()).not.to.include('access_token').and.not.to.include('refresh_token'));"
+                ]
               }
             }
           ]
