@@ -1,13 +1,17 @@
 from functools import lru_cache
+import logging
+import os
 from pathlib import Path
 from typing import Literal
 
+from dotenv import dotenv_values
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
+logger = logging.getLogger(__name__)
 
 
 class DatabaseConfigurationError(ValueError):
@@ -32,6 +36,16 @@ class Settings(BaseSettings):
             self.database_url = self.test_database_url
 
         validate_database_url(self.app_env, self.database_url)
+        if self.app_env == "local":
+            env_file_key = dotenv_values(ENV_FILE).get("OPENAI_API_KEY")
+            os_key = os.getenv("OPENAI_API_KEY")
+            if os_key and env_file_key and os_key.strip() != env_file_key.strip():
+                logger.warning(
+                    "Local OPENAI_API_KEY conflict detected; using project .env"
+                )
+            self.openai_api_key = env_file_key
+        elif self.app_env == "production":
+            self.openai_api_key = os.getenv("OPENAI_API_KEY")
         return self
 
 
@@ -75,6 +89,17 @@ def get_database_url(settings: Settings | None = None) -> str:
     if not configured_url:
         raise DatabaseConfigurationError("DATABASE_URL is required")
     return configured_url
+
+
+def get_openai_api_key(settings: Settings | None = None) -> str:
+    current_settings = settings or get_settings()
+    selected_key = current_settings.openai_api_key
+
+    if not selected_key or not selected_key.strip():
+        raise ValueError(
+            f"OPENAI_API_KEY is not configured for {current_settings.app_env}"
+        )
+    return selected_key.strip()
 
 
 @lru_cache

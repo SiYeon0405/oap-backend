@@ -1,5 +1,6 @@
-from openai import OpenAI
+import logging
 
+from app.ai.openai_client import get_openai_client
 from app.models.interview_message import InterviewMessage
 
 
@@ -12,6 +13,7 @@ FALLBACK_QUESTIONS = [
     "사용자가 자주 요청하는 개선사항은 무엇인가요?",
 ]
 FALLBACK_QUESTION = FALLBACK_QUESTIONS[0]
+logger = logging.getLogger(__name__)
 
 
 def _message_contents(messages: list[InterviewMessage], role: str) -> list[str]:
@@ -54,7 +56,7 @@ def generate_next_question(
         user_answers = "\n".join(
             f"- {answer}" for answer in _message_contents(messages, "USER")
         )
-        client = OpenAI()
+        client = get_openai_client()
         response = client.responses.create(
             model="gpt-4.1-mini",
             input=[
@@ -82,5 +84,12 @@ def generate_next_question(
         )
         next_question = response.output_text.strip()
         return next_question or _fallback_question(messages)
-    except Exception:
+    except Exception as exc:
+        error_body = getattr(exc, "body", None)
+        error = error_body.get("error", error_body) if isinstance(error_body, dict) else {}
+        logger.warning(
+            "Interview AI request failed; using fallback error_type=%s error_code=%s",
+            type(exc).__name__,
+            error.get("code") if isinstance(error, dict) else None,
+        )
         return _fallback_question(messages)

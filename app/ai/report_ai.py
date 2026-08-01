@@ -1,7 +1,6 @@
 import json
 
-from openai import OpenAI
-
+from app.ai.openai_client import get_openai_client
 from app.ai.report_retriever import (
     retrieve_report_knowledge,
     retrieve_report_knowledge_with_audit,
@@ -101,7 +100,7 @@ def _request_analysis_report(
             build_report_retrieval_query(analysis_request, interview_messages)
         )
 
-    client = OpenAI()
+    client = get_openai_client()
     response = client.responses.create(
         model="gpt-4.1-mini",
         input=[

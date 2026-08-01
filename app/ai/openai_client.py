@@ -1,18 +1,21 @@
+from functools import lru_cache
+
 from openai import OpenAI
 
-from app.core.config import get_settings
+from app.core.config import get_openai_api_key
 
 
 MODEL_NAME = "gpt-4.1-mini"
 
 
-def generate_text(prompt: str) -> str:
-    settings = get_settings()
-    if not settings.openai_api_key:
-        raise ValueError("OPENAI_API_KEY is not configured")
+@lru_cache
+def get_openai_client() -> OpenAI:
+    return OpenAI(api_key=get_openai_api_key())
 
+
+def generate_text(prompt: str) -> str:
     try:
-        client = OpenAI(api_key=settings.openai_api_key)
+        client = get_openai_client()
         response = client.responses.create(
             model=MODEL_NAME,
             input=prompt,

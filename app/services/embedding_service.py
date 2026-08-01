@@ -1,4 +1,4 @@
-from openai import OpenAI
+from app.ai.openai_client import get_openai_client
 
 
 class EmbeddingService:
@@ -6,7 +6,7 @@ class EmbeddingService:
 
     def __init__(self, model: str = "text-embedding-3-small"):
         self.model = model
-        self.client = OpenAI()
+        self.client = get_openai_client()
 
     def embed_text(self, text: str) -> list[float]:
         self._validate_text(text)
