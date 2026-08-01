@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 from app.ai import interview_question_ai, openai_client, report_ai
 from app.core.config import Settings, get_openai_api_key
 from app.services.embedding_service import EmbeddingService
+from app.services.interview_message_service import InterviewMessageService
 
 
 class OpenAIKeyResolutionTest(unittest.TestCase):
@@ -105,7 +106,11 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
         factory.assert_called_once_with()
 
     def test_interview_uses_common_client(self):
-        response = SimpleNamespace(output_text="새 질문인가요?")
+        question = (
+            "누가 이 서비스를 가장 많이 쓸까요? "
+            "(예: 혼자 가게를 운영하는 사장님) 잘 모르겠으면 넘어가도 됩니다."
+        )
+        response = SimpleNamespace(output_text=question)
         client = SimpleNamespace(
             responses=SimpleNamespace(create=MagicMock(return_value=response))
         )
@@ -117,12 +122,22 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
                 SimpleNamespace(name="service"),
                 [],
             )
-        self.assertEqual(result, "새 질문인가요?")
+        self.assertEqual(result, question)
         factory.assert_called_once_with()
+
+        request_input = client.responses.create.call_args.kwargs["input"]
+        system_prompt = request_input[0]["content"]
+        self.assertIn("한 질문에서는 한 가지 내용만", system_prompt)
+        self.assertIn("짧고 구체적인 예시", system_prompt)
+        self.assertIn("잘 모르겠으면 넘어가도", system_prompt)
 
     def test_interview_fallback_log_does_not_include_key(self):
         secret = "sk-secret-must-not-appear"
-        error = RuntimeError(secret)
+
+        class AuthenticationError(Exception):
+            body = {"error": {"code": "invalid_api_key"}}
+
+        error = AuthenticationError(secret)
         with (
             patch(
                 "app.ai.interview_question_ai.get_openai_client",
@@ -138,7 +153,78 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
                 [],
             )
         self.assertTrue(result)
-        self.assertNotIn(secret, " ".join(logs.output))
+        self.assertIn("(예:", result)
+        self.assertIn("잘 모르겠으면", result)
+        log_output = " ".join(logs.output)
+        self.assertIn("error_type=AuthenticationError", log_output)
+        self.assertIn("error_code=invalid_api_key", log_output)
+        self.assertNotIn(secret, log_output)
+
+    def test_all_interview_fallback_questions_are_easy_to_answer(self):
+        self.assertEqual(len(interview_question_ai.FALLBACK_QUESTIONS), 5)
+        for question in interview_question_ai.FALLBACK_QUESTIONS:
+            with self.subTest(question=question):
+                self.assertEqual(question.count("?"), 1)
+                self.assertIn("(예:", question)
+                self.assertIn("잘 모르겠으면", question)
+
+    def test_interview_fallback_follows_five_unique_steps(self):
+        messages = []
+        generated = []
+        for question in interview_question_ai.FALLBACK_QUESTIONS:
+            next_question = interview_question_ai._fallback_question(messages)
+            generated.append(next_question)
+            messages.append(SimpleNamespace(role="AI", content=next_question))
+            messages.append(SimpleNamespace(role="USER", content="잘 모르겠어요"))
+
+        self.assertEqual(generated, interview_question_ai.FALLBACK_QUESTIONS)
+        self.assertEqual(len(set(generated)), 5)
+
+    def test_interview_completes_after_exactly_five_answers(self):
+        messages = [
+            SimpleNamespace(role="USER", content=f"답변 {index}")
+            for index in range(1, 5)
+        ]
+        analysis_request = SimpleNamespace(
+            id=1,
+            status="INTERVIEWING",
+            interview_completed=False,
+        )
+        repository = MagicMock()
+        repository.find_max_message_order.return_value = len(messages)
+        repository.find_messages.return_value = messages
+        repository.save_message.side_effect = lambda session, message: messages.append(
+            message
+        )
+        session = MagicMock()
+        session_context = MagicMock()
+        session_context.__enter__.return_value = session
+        report_result = SimpleNamespace(status="COMPLETED")
+
+        with (
+            patch(
+                "app.services.interview_message_service.get_session",
+                return_value=session_context,
+            ),
+            patch(
+                "app.services.interview_message_service.AnalysisRequestService.get_owned_or_404",
+                return_value=analysis_request,
+            ),
+            patch(
+                "app.services.interview_message_service.AnalysisReportService.start_analysis",
+                return_value=report_result,
+            ) as start_analysis,
+        ):
+            result = InterviewMessageService(repository).save_answer(
+                1,
+                SimpleNamespace(answer="다섯 번째 답변"),
+                1,
+            )
+
+        self.assertTrue(result.interviewCompleted)
+        self.assertEqual(result.nextQuestion, "")
+        self.assertTrue(analysis_request.interview_completed)
+        start_analysis.assert_called_once_with(1)
 
     def test_embedding_service_uses_common_client(self):
         client = object()

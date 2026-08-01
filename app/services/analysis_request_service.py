@@ -76,4 +76,8 @@ class AnalysisRequestService:
         industry: str,
         main_question: str,
     ) -> str:
-        return "서비스의 주요 기능을 조금 더 구체적으로 알려주세요."
+        return (
+            "누가 이 서비스를 가장 많이 쓸까요? "
+            "(예: 혼자 가게를 운영하는 사장님) "
+            "잘 모르겠으면 '잘 모르겠어요'라고 답해도 됩니다."
+        )
