@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.database.session import get_session
+from app.database.session import get_database_target, get_session
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -23,4 +23,12 @@ def database_health_check():
             detail="database connection failed",
         ) from exc
 
-    return {"status": "ok", "database": "connected"}
+    target = get_database_target()
+    return {
+        "status": "ok",
+        "database": "connected",
+        "driver": target["driver"],
+        "host": target["host"],
+        "port": target["port"],
+        "databaseName": target["database"],
+    }
