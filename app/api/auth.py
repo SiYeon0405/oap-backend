@@ -3,17 +3,30 @@ from dataclasses import dataclass
 from typing import Annotated
 from urllib.parse import urlsplit
 
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Response, status
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 
 from app.models.user import User
 from app.schemas.auth import (
     AuthActionResponse,
+    ConsentItem,
+    ConsentResponse,
     DeleteAccountRequest,
     LoginRequest,
     LoginResponse,
+    MarketingConsentRequest,
     SignupRequest,
     SignupResponse,
 )
+from app.services.user_consent_service import UserConsentService
 from app.services.auth_service import (
     AccountDeletionError,
     AuthService,
@@ -75,9 +88,13 @@ def validate_request_origin(
     response_model=SignupResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def signup(request: SignupRequest):
+def signup(request: SignupRequest, http_request: Request):
     try:
-        user = AuthService().signup(request)
+        user = AuthService().signup(
+            request,
+            ip_address=_client_ip(http_request),
+            user_agent=http_request.headers.get("user-agent"),
+        )
     except EmailAlreadyExistsError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -90,6 +107,34 @@ def signup(request: SignupRequest):
         name=user.name,
         status=user.status,
         createdAt=user.created_at,
+    )
+
+
+@router.get(
+    "/consents",
+    response_model=ConsentResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_consents(user: Annotated[User, Depends(get_current_user)]):
+    return UserConsentService().get_consents(user.id)
+
+
+@router.patch(
+    "/consents/marketing",
+    response_model=ConsentItem,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(validate_request_origin)],
+)
+def update_marketing_consent(
+    request: MarketingConsentRequest,
+    http_request: Request,
+    user: Annotated[User, Depends(get_current_user)],
+):
+    return UserConsentService().set_marketing(
+        user.id,
+        request.agreed,
+        ip_address=_client_ip(http_request),
+        user_agent=http_request.headers.get("user-agent"),
     )
 
 
@@ -261,3 +306,7 @@ def _get_bool_env(name: str, default: bool) -> bool:
     if normalized not in {"true", "false"}:
         raise RuntimeError(f"{name} must be true or false")
     return normalized == "true"
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client is not None else None

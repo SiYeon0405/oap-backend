@@ -1,7 +1,8 @@
 import re
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -11,6 +12,17 @@ class SignupRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=8, max_length=72)
     name: str | None = Field(default=None, max_length=100)
+    termsAgreed: bool
+    privacyAgreed: bool
+    marketingAgreed: bool
+
+    @model_validator(mode="after")
+    def validate_required_consents(self):
+        if not self.termsAgreed:
+            raise ValueError("Terms consent is required")
+        if not self.privacyAgreed:
+            raise ValueError("Privacy consent is required")
+        return self
 
     @field_validator("email")
     @classmethod
@@ -86,3 +98,22 @@ class DeleteAccountRequest(BaseModel):
 
 class AuthActionResponse(BaseModel):
     detail: str
+
+
+ConsentType = Literal["TERMS", "PRIVACY", "MARKETING"]
+
+
+class ConsentItem(BaseModel):
+    type: ConsentType
+    documentVersion: str
+    agreed: bool
+    occurredAt: datetime
+
+
+class ConsentResponse(BaseModel):
+    current: list[ConsentItem]
+    history: list[ConsentItem]
+
+
+class MarketingConsentRequest(BaseModel):
+    agreed: bool

@@ -13,6 +13,7 @@ from app.database.session import get_session
 from app.models.refresh_token_session import RefreshTokenSession
 from app.models.user import User
 from app.schemas.auth import DeleteAccountRequest, LoginRequest, SignupRequest
+from app.services.user_consent_service import UserConsentService
 
 
 class EmailAlreadyExistsError(Exception):
@@ -46,7 +47,13 @@ DUMMY_PASSWORD_HASH = bcrypt.hashpw(
 
 
 class AuthService:
-    def signup(self, request: SignupRequest) -> User:
+    def signup(
+        self,
+        request: SignupRequest,
+        *,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> User:
         with get_session() as session:
             existing_user = session.scalar(
                 select(User).where(User.email == request.email)
@@ -66,10 +73,23 @@ class AuthService:
             session.add(user)
 
             try:
+                session.flush()
+                UserConsentService().add_initial_consents(
+                    session,
+                    user.id,
+                    terms_agreed=request.termsAgreed,
+                    privacy_agreed=request.privacyAgreed,
+                    marketing_agreed=request.marketingAgreed,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
                 session.commit()
             except IntegrityError as exc:
                 session.rollback()
                 raise EmailAlreadyExistsError from exc
+            except Exception:
+                session.rollback()
+                raise
 
             session.refresh(user)
             return user

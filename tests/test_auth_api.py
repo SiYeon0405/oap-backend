@@ -43,11 +43,113 @@ class AuthApiTest(unittest.TestCase):
                     "email": "user@example.com",
                     "password": "password123",
                     "name": "User",
+                    "termsAgreed": True,
+                    "privacyAgreed": True,
+                    "marketingAgreed": False,
                 },
             )
 
         self.assertEqual(response.status_code, 201)
         self.assertNotIn("token", response.text.lower())
+        self.assertEqual(
+            set(response.json()),
+            {"id", "email", "name", "status", "createdAt"},
+        )
+
+    def test_signup_rejects_missing_required_consent(self):
+        for field in ("termsAgreed", "privacyAgreed"):
+            payload = {
+                "email": "user@example.com",
+                "password": "password123",
+                "name": "User",
+                "termsAgreed": True,
+                "privacyAgreed": True,
+                "marketingAgreed": False,
+            }
+            payload[field] = False
+            with self.subTest(field=field), patch(
+                "app.api.auth.AuthService.signup"
+            ) as signup:
+                response = self.client.post("/api/v1/auth/signup", json=payload)
+                self.assertEqual(response.status_code, 422)
+                signup.assert_not_called()
+
+    def test_unauthenticated_consent_read_is_401(self):
+        response = self.client.get("/api/v1/auth/consents")
+        self.assertEqual(response.status_code, 401)
+
+    def test_consent_response_does_not_expose_request_metadata(self):
+        from app.api.auth import get_current_user
+
+        app.dependency_overrides[get_current_user] = lambda: self.user
+        consent_response = {
+            "current": [
+                {
+                    "type": "MARKETING",
+                    "documentVersion": "2.1",
+                    "agreed": False,
+                    "occurredAt": datetime.now(timezone.utc),
+                }
+            ],
+            "history": [],
+        }
+        try:
+            with patch(
+                "app.api.auth.UserConsentService.get_consents",
+                return_value=consent_response,
+            ):
+                response = self.client.get("/api/v1/auth/consents")
+        finally:
+            app.dependency_overrides.clear()
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("ip", response.text.lower())
+        self.assertNotIn("useragent", response.text.lower())
+        self.assertNotIn("token", response.text.lower())
+
+    def test_marketing_change_uses_current_user_and_origin_validation(self):
+        from app.api.auth import get_current_user
+
+        app.dependency_overrides[get_current_user] = lambda: self.user
+        current = {
+            "type": "MARKETING",
+            "documentVersion": "2.1",
+            "agreed": False,
+            "occurredAt": datetime.now(timezone.utc),
+        }
+        try:
+            with patch(
+                "app.api.auth.UserConsentService.set_marketing",
+                return_value=current,
+            ) as set_marketing:
+                response = self.client.patch(
+                    "/api/v1/auth/consents/marketing",
+                    json={"agreed": False},
+                    headers={
+                        "Origin": "http://localhost:3000",
+                        "X-Forwarded-For": "203.0.113.10",
+                    },
+                )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(set_marketing.call_args.args, (42, False))
+            self.assertNotEqual(
+                set_marketing.call_args.kwargs["ip_address"],
+                "203.0.113.10",
+            )
+
+            rejected = self.client.patch(
+                "/api/v1/auth/consents/marketing",
+                json={"agreed": True},
+                headers={"Origin": "https://attacker.example"},
+            )
+            self.assertEqual(rejected.status_code, 403)
+            self.assertEqual(
+                self.client.patch(
+                    "/api/v1/auth/consents/terms", json={"agreed": False}
+                ).status_code,
+                404,
+            )
+        finally:
+            app.dependency_overrides.clear()
 
     def test_login_sets_httponly_cookies_without_token_json(self):
         result = LoginResult(
