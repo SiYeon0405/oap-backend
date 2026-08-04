@@ -408,6 +408,23 @@ class AnalysisStartResponse(BaseModel):
     status: str
 
 
+class AnalysisReportListItem(BaseModel):
+    requestId: int
+    serviceName: str
+    oneLineDescription: str
+    industry: str
+    status: str
+    createdAt: datetime
+
+
+class AnalysisReportListResponse(BaseModel):
+    items: list[AnalysisReportListItem]
+    page: int
+    size: int
+    totalElements: int
+    totalPages: int
+
+
 class AnalysisReportResponse(ContractModel):
     serviceSummary: ReportSection
     marketAnalysis: MarketAnalysisSection

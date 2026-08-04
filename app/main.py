@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.analysis import router as analysis_router
+from app.api.analysis import reports_router, router as analysis_router
 from app.api.analysis_request import router as analysis_request_router
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
@@ -32,6 +32,7 @@ app.include_router(auth_router)
 app.include_router(analysis_request_router)
 app.include_router(interview_router)
 app.include_router(analysis_router)
+app.include_router(reports_router)
 
 
 @app.on_event("startup")

@@ -10,7 +10,12 @@ from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
 from app.repositories.interview_message_repository import InterviewMessageRepository
-from app.schemas.analysis_report import AnalysisReportResponse, AnalysisStartResponse
+from app.schemas.analysis_report import (
+    AnalysisReportListItem,
+    AnalysisReportListResponse,
+    AnalysisReportResponse,
+    AnalysisStartResponse,
+)
 from app.schemas.report_citation import ReportCitationsResponse
 from app.services.report_citation_service import ReportCitationService
 from app.services.retrieval_audit_service import RetrievalAuditService
@@ -33,6 +38,37 @@ class AnalysisReportService:
         )
         self.report_citation_service = (
             report_citation_service or ReportCitationService()
+        )
+
+    def get_reports(
+        self,
+        user_id: int,
+        page: int,
+        size: int,
+    ) -> AnalysisReportListResponse:
+        with get_session() as session:
+            rows, total = self.repository.find_completed_reports(
+                session,
+                user_id,
+                page,
+                size,
+            )
+        return AnalysisReportListResponse(
+            items=[
+                AnalysisReportListItem(
+                    requestId=row.id,
+                    serviceName=row.service_name,
+                    oneLineDescription=row.one_line_description,
+                    industry=row.industry,
+                    status=row.status,
+                    createdAt=row.created_at,
+                )
+                for row in rows
+            ],
+            page=page,
+            size=size,
+            totalElements=total,
+            totalPages=(total + size - 1) // size,
         )
 
     def start_analysis(self, request_id: int) -> AnalysisStartResponse:

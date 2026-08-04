@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.auth import get_current_user
 from app.database.session import get_session
-from app.schemas.analysis_report import AnalysisReportResponse
+from app.schemas.analysis_report import AnalysisReportListResponse, AnalysisReportResponse
 from app.schemas.report_citation import ReportCitationsResponse
 from app.services.analysis_report_service import AnalysisReportService
 from app.services.analysis_request_service import AnalysisRequestService
@@ -11,6 +11,17 @@ router = APIRouter(
     prefix="/api/v1/analysis-requests/{requestId}",
     tags=["analysis"],
 )
+
+reports_router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
+
+
+@reports_router.get("", response_model=AnalysisReportListResponse)
+def get_reports(
+    page: int = Query(default=0, ge=0),
+    size: int = Query(default=20, ge=1, le=100),
+    current_user=Depends(get_current_user),
+):
+    return AnalysisReportService().get_reports(current_user.id, page, size)
 
 
 @router.get("/report", response_model=AnalysisReportResponse)

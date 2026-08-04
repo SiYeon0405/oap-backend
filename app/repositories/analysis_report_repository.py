@@ -1,3 +1,4 @@
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.analysis_report import AnalysisReport
@@ -6,6 +7,50 @@ from app.models.interview_message import InterviewMessage
 
 
 class AnalysisReportRepository:
+    def find_completed_reports(
+        self,
+        session: Session,
+        user_id: int,
+        page: int,
+        size: int,
+    ) -> tuple[list, int]:
+        filters = (
+            AnalysisRequest.user_id == user_id,
+            AnalysisRequest.status == "COMPLETED",
+        )
+        items = session.execute(
+            select(
+                AnalysisRequest.id,
+                AnalysisRequest.service_name,
+                AnalysisRequest.one_line_description,
+                AnalysisRequest.industry,
+                AnalysisRequest.status,
+                AnalysisRequest.created_at,
+            )
+            .distinct()
+            .join(
+                AnalysisReport,
+                AnalysisReport.analysis_request_id == AnalysisRequest.id,
+            )
+            .where(*filters)
+            .order_by(
+                AnalysisRequest.created_at.desc(),
+                AnalysisRequest.id.desc(),
+            )
+            .offset(page * size)
+            .limit(size)
+        ).all()
+        total = session.scalar(
+            select(func.count(func.distinct(AnalysisRequest.id)))
+            .select_from(AnalysisRequest)
+            .join(
+                AnalysisReport,
+                AnalysisReport.analysis_request_id == AnalysisRequest.id,
+            )
+            .where(*filters)
+        )
+        return items, total or 0
+
     def find_analysis_request(
         self,
         session: Session,
