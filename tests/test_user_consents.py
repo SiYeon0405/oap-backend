@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models.base import Base
+from app.models.marketing_consent import MarketingConsent
 from app.models.user import User
 from app.models.user_consent import UserConsent
 from app.schemas.auth import SignupRequest
@@ -31,7 +32,11 @@ class UserConsentIntegrationTest(unittest.TestCase):
         )
         Base.metadata.create_all(
             self.engine,
-            tables=[User.__table__, UserConsent.__table__],
+            tables=[
+                User.__table__,
+                UserConsent.__table__,
+                MarketingConsent.__table__,
+            ],
         )
         self.session_factory = sessionmaker(bind=self.engine)
         self.auth_session_patch = patch(
@@ -58,15 +63,17 @@ class UserConsentIntegrationTest(unittest.TestCase):
         )
 
     @staticmethod
-    def signup_request(marketing=False):
-        return SignupRequest(
-            email="user@example.com",
-            password="password123",
-            name="User",
-            termsAgreed=True,
-            privacyAgreed=True,
-            marketingAgreed=marketing,
-        )
+    def signup_request(marketing=False, **overrides):
+        payload = {
+            "email": "user@example.com",
+            "password": "password123",
+            "name": "User",
+            "termsAgreed": True,
+            "privacyAgreed": True,
+            "marketingAgreed": marketing,
+        }
+        payload.update(overrides)
+        return SignupRequest(**payload)
 
     def signup(self, marketing=False):
         return AuthService().signup(
@@ -75,7 +82,7 @@ class UserConsentIntegrationTest(unittest.TestCase):
             user_agent="test-agent",
         )
 
-    def test_signup_stores_all_server_controlled_consents(self):
+    def test_signup_separates_required_and_marketing_consents(self):
         before = datetime.now(timezone.utc)
         user = self.signup(marketing=False)
         after = datetime.now(timezone.utc)
@@ -84,28 +91,63 @@ class UserConsentIntegrationTest(unittest.TestCase):
             rows = session.scalars(
                 select(UserConsent).order_by(UserConsent.consent_type)
             ).all()
+            marketing_rows = session.scalars(select(MarketingConsent)).all()
         self.assertEqual(user.email, "user@example.com")
         self.assertEqual(
             {row.consent_type: row.is_agreed for row in rows},
-            {"MARKETING": False, "PRIVACY": True, "TERMS": True},
+            {"PRIVACY": True, "TERMS": True},
         )
+        self.assertEqual([row.is_agreed for row in marketing_rows], [False])
         self.assertEqual(
-            {row.document_version for row in rows},
+            {row.document_version for row in [*rows, *marketing_rows]},
             {CURRENT_CONSENT_DOCUMENT_VERSION},
         )
-        self.assertTrue(all(before <= row.occurred_at.replace(tzinfo=timezone.utc) <= after for row in rows))
-        self.assertEqual({row.ip_address for row in rows}, {"127.0.0.1"})
-        self.assertEqual({row.user_agent for row in rows}, {"test-agent"})
+        all_rows = [*rows, *marketing_rows]
+        self.assertTrue(
+            all(
+                before <= row.occurred_at.replace(tzinfo=timezone.utc) <= after
+                for row in all_rows
+            )
+        )
+        self.assertEqual({row.ip_address for row in all_rows}, {"127.0.0.1"})
+        self.assertEqual({row.user_agent for row in all_rows}, {"test-agent"})
 
-    def test_signup_rolls_back_user_when_consent_save_fails(self):
+    def test_signup_defaults_marketing_to_false(self):
+        request = SignupRequest(
+            email="user@example.com",
+            password="password123",
+            name="User",
+            termsAgreed=True,
+            privacyAgreed=True,
+        )
+        AuthService().signup(request)
+        with self.session_factory() as session:
+            self.assertFalse(session.scalar(select(MarketingConsent)).is_agreed)
+
+    def test_signup_normalizes_name_and_rejects_invalid_names(self):
+        self.assertEqual(self.signup_request(name="  User Name  ").name, "User Name")
+        for value in (None, "", "   "):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.signup_request(name=value)
+
+    def test_signup_rejects_false_required_consent(self):
+        for field in ("termsAgreed", "privacyAgreed"):
+            with self.subTest(field=field), self.assertRaises(ValueError):
+                self.signup_request(**{field: False})
+
+    def test_signup_rolls_back_all_rows_when_marketing_save_fails(self):
         with patch(
-            "app.services.auth_service.UserConsentService.add_initial_consents",
+            "app.services.user_consent_service.MarketingConsentRepository.add",
             side_effect=RuntimeError("consent failed"),
         ):
             with self.assertRaisesRegex(RuntimeError, "consent failed"):
                 self.signup()
         with self.session_factory() as session:
             self.assertEqual(session.scalar(select(func.count(User.id))), 0)
+            self.assertEqual(session.scalar(select(func.count(UserConsent.id))), 0)
+            self.assertEqual(
+                session.scalar(select(func.count(MarketingConsent.id))), 0
+            )
 
     def test_current_history_marketing_append_and_idempotency(self):
         user = self.signup(marketing=False)
@@ -123,7 +165,10 @@ class UserConsentIntegrationTest(unittest.TestCase):
         )
         self.assertFalse(withdrawn.agreed)
         with self.session_factory() as session:
-            self.assertEqual(session.scalar(select(func.count(UserConsent.id))), 3)
+            self.assertEqual(session.scalar(select(func.count(UserConsent.id))), 2)
+            self.assertEqual(
+                session.scalar(select(func.count(MarketingConsent.id))), 1
+            )
 
         agreed = service.set_marketing(
             user.id,
@@ -147,6 +192,16 @@ class UserConsentIntegrationTest(unittest.TestCase):
         self.assertFalse(current["MARKETING"].agreed)
         self.assertEqual(len(result.history), 5)
 
+        with self.session_factory() as session:
+            self.assertEqual(
+                session.scalar(
+                    select(func.count(UserConsent.id)).where(
+                        UserConsent.consent_type == "MARKETING"
+                    )
+                ),
+                0,
+            )
+
     def test_deleting_user_cascades_consent_history(self):
         user = self.signup()
         with self.session_factory() as session:
@@ -154,6 +209,9 @@ class UserConsentIntegrationTest(unittest.TestCase):
             session.delete(stored)
             session.commit()
             self.assertEqual(session.scalar(select(func.count(UserConsent.id))), 0)
+            self.assertEqual(
+                session.scalar(select(func.count(MarketingConsent.id))), 0
+            )
 
 
 if __name__ == "__main__":

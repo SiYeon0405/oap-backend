@@ -74,6 +74,41 @@ class AuthApiTest(unittest.TestCase):
                 self.assertEqual(response.status_code, 422)
                 signup.assert_not_called()
 
+    def test_signup_requires_nonblank_name_and_defaults_marketing(self):
+        base_payload = {
+            "email": "user@example.com",
+            "password": "password123",
+            "termsAgreed": True,
+            "privacyAgreed": True,
+        }
+        for name in (None, "", "   "):
+            payload = {**base_payload, "name": name}
+            with self.subTest(name=name), patch(
+                "app.api.auth.AuthService.signup"
+            ) as signup:
+                response = self.client.post("/api/v1/auth/signup", json=payload)
+                self.assertEqual(response.status_code, 422)
+                signup.assert_not_called()
+
+        with patch("app.api.auth.AuthService.signup") as signup:
+            response = self.client.post(
+                "/api/v1/auth/signup", json=base_payload
+            )
+            self.assertEqual(response.status_code, 422)
+            signup.assert_not_called()
+
+        with patch(
+            "app.api.auth.AuthService.signup", return_value=self.user
+        ) as signup:
+            response = self.client.post(
+                "/api/v1/auth/signup",
+                json={**base_payload, "name": "  User  "},
+            )
+        self.assertEqual(response.status_code, 201)
+        request = signup.call_args.args[0]
+        self.assertEqual(request.name, "User")
+        self.assertFalse(request.marketingAgreed)
+
     def test_unauthenticated_consent_read_is_401(self):
         response = self.client.get("/api/v1/auth/consents")
         self.assertEqual(response.status_code, 401)

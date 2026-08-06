@@ -13,15 +13,12 @@ from sqlalchemy import (
 from app.models.base import Base
 
 
-class UserConsent(Base):
-    """Required terms and privacy consent history."""
-
-    __tablename__ = "user_consents"
+class MarketingConsent(Base):
+    __tablename__ = "marketing_consents"
     __table_args__ = (
         Index(
-            "ix_user_consents_user_type_occurred_id",
+            "ix_marketing_consents_user_occurred_id",
             "user_id",
-            "consent_type",
             "occurred_at",
             "id",
         ),
@@ -33,7 +30,6 @@ class UserConsent(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    consent_type = Column(String(20), nullable=False)
     document_version = Column(String(50), nullable=False)
     is_agreed = Column(Boolean, nullable=False)
     occurred_at = Column(DateTime(timezone=True), nullable=False)

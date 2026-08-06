@@ -11,10 +11,10 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 class SignupRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=8, max_length=72)
-    name: str | None = Field(default=None, max_length=100)
+    name: str = Field(min_length=1, max_length=100)
     termsAgreed: bool
     privacyAgreed: bool
-    marketingAgreed: bool
+    marketingAgreed: bool = False
 
     @model_validator(mode="after")
     def validate_required_consents(self):
@@ -41,9 +41,7 @@ class SignupRequest(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
+    def validate_name(cls, value: str) -> str:
         normalized = value.strip()
         if not normalized:
             raise ValueError("Name must not be blank")
