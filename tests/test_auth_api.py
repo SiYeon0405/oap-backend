@@ -226,30 +226,31 @@ class AuthApiTest(unittest.TestCase):
         response = self.client.post("/api/v1/auth/refresh")
         self.assertEqual(response.status_code, 401)
 
-    def test_production_origin_allows_refresh_and_logout(self):
+    def test_configured_origin_allows_refresh_and_logout(self):
         result = LoginResult(
             user=self.user,
             access_token="new-access-value",
             refresh_token="new-refresh-value",
         )
-        origin = {"Origin": "https://www.ooap.co.kr"}
-        with patch(
-            "app.api.auth.AuthService.refresh", return_value=result
-        ) as refresh:
+        origin = {"Origin": "https://frontend.example/"}
+        with patch.dict(
+            os.environ,
+            {"CORS_ALLOWED_ORIGINS": "https://frontend.example"},
+        ), patch("app.api.auth.AuthService.refresh", return_value=result) as refresh:
             response = self.client.post(
                 "/api/v1/auth/refresh",
                 headers={**origin, "Cookie": "refresh_token=refresh-value"},
             )
-        self.assertEqual(response.status_code, 200)
-        refresh.assert_called_once_with("refresh-value")
+            self.assertEqual(response.status_code, 200)
+            refresh.assert_called_once_with("refresh-value")
 
-        with patch("app.api.auth.AuthService.logout") as logout:
-            response = self.client.post(
-                "/api/v1/auth/logout",
-                headers=origin,
-            )
-        self.assertEqual(response.status_code, 200)
-        logout.assert_called_once()
+            with patch("app.api.auth.AuthService.logout") as logout:
+                response = self.client.post(
+                    "/api/v1/auth/logout",
+                    headers=origin,
+                )
+            self.assertEqual(response.status_code, 200)
+            logout.assert_called_once()
 
     def test_logout_is_idempotent_and_clears_both_cookies(self):
         with patch("app.api.auth.AuthService.logout") as logout:

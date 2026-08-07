@@ -79,6 +79,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "pm.test('signup response fields exist', () => { const body = pm.response.json(); ['id','email','name','status','createdAt'].forEach(k => pm.expect(body).to.have.property(k)); });",
                   "pm.test('response has no tokens', () => { const body = pm.response.json(); pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
                 ]
               }
@@ -90,7 +91,7 @@
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{emailA}}\",\n  \"password\": \"{{passwordA}}\",\n  \"name\": \"Postman User A\"\n}",
+              "raw": "{\n  \"email\": \"{{emailA}}\",\n  \"password\": \"{{passwordA}}\",\n  \"name\": \"{{signupName}}\",\n  \"termsAgreed\": true,\n  \"privacyAgreed\": true,\n  \"marketingAgreed\": {{marketingAgreed}}\n}",
               "options": {"raw": {"language": "json"}}
             },
             "url": "{{baseUrl}}/api/v1/auth/signup",
@@ -150,7 +151,7 @@
           "name": "Refresh A",
           "request": {
             "method": "POST",
-            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "header": [{"key": "Origin", "value": "{{allowedOrigin}}"}],
             "url": "{{baseUrl}}/api/v1/auth/refresh",
             "description": "Refresh HttpOnly Cookie로 rotation합니다."
           },
@@ -171,7 +172,7 @@
           "name": "Logout A",
           "request": {
             "method": "POST",
-            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "header": [{"key": "Origin", "value": "{{allowedOrigin}}"}],
             "url": "{{baseUrl}}/api/v1/auth/logout",
             "description": "현재 A 기기의 token family를 폐기하고 Cookie를 삭제합니다."
           },
@@ -191,7 +192,7 @@
           "name": "Refresh A After Logout",
           "request": {
             "method": "POST",
-            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "header": [{"key": "Origin", "value": "{{allowedOrigin}}"}],
             "url": "{{baseUrl}}/api/v1/auth/refresh",
             "description": "로그아웃 직후 refresh가 거부되는지 확인합니다."
           },
@@ -236,7 +237,7 @@
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"password\": \"{{passwordB}}\",\n  \"name\": \"Postman User B\"\n}",
+              "raw": "{\n  \"email\": \"{{emailB}}\",\n  \"password\": \"{{passwordB}}\",\n  \"name\": \"Postman User B\",\n  \"termsAgreed\": true,\n  \"privacyAgreed\": true,\n  \"marketingAgreed\": {{marketingAgreed}}\n}",
               "options": {"raw": {"language": "json"}}
             },
             "url": "{{baseUrl}}/api/v1/auth/signup",
@@ -297,6 +298,87 @@
                   "pm.test('headlineMetrics is array', () => pm.expect(body.headlineMetrics).to.be.an('array'));",
                   "pm.test('evidenceCount is number', () => pm.expect(body.reportMeta.evidenceCount).to.be.a('number'));",
                   "pm.test('token fields are absent', () => pm.expect(JSON.stringify(body).toLowerCase()).not.to.include('access_token').and.not.to.include('refresh_token'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Google Login",
+          "request": {
+            "auth": {"type": "noauth"},
+            "method": "POST",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Origin", "value": "{{allowedOrigin}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idToken\": \"{{googleIdToken}}\",\n  \"termsAgreed\": true,\n  \"privacyAgreed\": true,\n  \"marketingAgreed\": {{marketingAgreed}}\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/google",
+            "description": "Google ID token을 서버에서 검증하고 기존 HttpOnly Cookie를 발급합니다. 실제 토큰은 environment에 저장하지 마세요."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('login response fields exist', () => { const body = pm.response.json(); ['id','email','name','status'].forEach(k => pm.expect(body).to.have.property(k)); });",
+                  "pm.test('response has no tokens', () => { const body = pm.response.json(); pm.expect(body).not.to.have.property('access_token'); pm.expect(body).not.to.have.property('refresh_token'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Consents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/auth/consents",
+            "description": "Access HttpOnly Cookie로 현재 동의 상태와 이력을 조회합니다. Cookie가 없거나 유효하지 않으면 401입니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('consent arrays exist', () => { const body = pm.response.json(); pm.expect(body.current).to.be.an('array'); pm.expect(body.history).to.be.an('array'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Marketing Consent",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {"key": "Content-Type", "value": "application/json"},
+              {"key": "Origin", "value": "{{allowedOrigin}}"}
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agreed\": true\n}",
+              "options": {"raw": {"language": "json"}}
+            },
+            "url": "{{baseUrl}}/api/v1/auth/consents/marketing",
+            "description": "마케팅 동의 또는 철회 이력을 추가합니다. Access Cookie가 없거나 유효하지 않으면 401입니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('marketing consent response fields exist', () => { const body = pm.response.json(); pm.expect(body.type).to.eql('MARKETING'); ['documentVersion','agreed','occurredAt'].forEach(k => pm.expect(body).to.have.property(k)); });"
                 ]
               }
             }
@@ -407,6 +489,27 @@
     {
       "name": "05 Report",
       "item": [
+        {
+          "name": "List Reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/reports?page={{page}}&size={{size}}",
+            "description": "현재 사용자의 완료된 리포트 목록을 페이지 단위로 조회합니다. Access Cookie가 없거나 유효하지 않으면 401입니다."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('pagination fields exist', () => { const body = pm.response.json(); pm.expect(body.items).to.be.an('array'); ['page','size','totalElements','totalPages'].forEach(k => pm.expect(body).to.have.property(k)); });"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Get Report A",
           "request": {
@@ -521,7 +624,7 @@
             "header": [{"key": "Content-Type", "value": "application/json"}],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{deleteEmail}}\",\n  \"password\": \"{{deletePassword}}\",\n  \"name\": \"Postman Delete User\"\n}",
+              "raw": "{\n  \"email\": \"{{deleteEmail}}\",\n  \"password\": \"{{deletePassword}}\",\n  \"name\": \"Postman Delete User\",\n  \"termsAgreed\": true,\n  \"privacyAgreed\": true,\n  \"marketingAgreed\": false\n}",
               "options": {"raw": {"language": "json"}}
             },
             "url": "{{baseUrl}}/api/v1/auth/signup",
@@ -558,7 +661,7 @@
             "method": "DELETE",
             "header": [
               {"key": "Content-Type", "value": "application/json"},
-              {"key": "Origin", "value": "http://localhost:3000"}
+              {"key": "Origin", "value": "{{allowedOrigin}}"}
             ],
             "body": {
               "mode": "raw",
@@ -566,7 +669,7 @@
               "options": {"raw": {"language": "json"}}
             },
             "url": "{{baseUrl}}/api/v1/auth/me",
-            "description": "Access HttpOnly Cookie의 현재 사용자만 비밀번호 확인 후 물리 삭제합니다."
+            "description": "주의: 계정과 사용자 소유 데이터가 삭제되는 파괴적 요청입니다. Collection Runner와 운영 환경에서 자동 실행하지 마세요. 이 요청 Body는 일반 계정용이며 password로 재인증합니다. Google 계정은 별도로 {\"idToken\":\"{{googleIdToken}}\"} Body만 사용하고 탈퇴 직전에 받은 최신 Google ID Token을 전달합니다. password와 idToken을 동시에 보내지 마세요."
           },
           "event": [
             {
@@ -600,7 +703,7 @@
           "name": "Refresh After Account Deletion",
           "request": {
             "method": "POST",
-            "header": [{"key": "Origin", "value": "http://localhost:3000"}],
+            "header": [{"key": "Origin", "value": "{{allowedOrigin}}"}],
             "url": "{{baseUrl}}/api/v1/auth/refresh",
             "description": "회원 탈퇴 후 Refresh 인증이 거부되는지 확인합니다."
           },

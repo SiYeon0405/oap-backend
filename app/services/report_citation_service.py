@@ -142,17 +142,65 @@ class ReportCitationService:
             analysis_request_id,
         )
         result = {section_key: [] for section_key in REPORT_KEYS}
+        seen_sources = {section_key: set() for section_key in REPORT_KEYS}
         for citation in citations:
             evidence = citation.retrieval_evidence
+            metadata = self._normalize_reference_metadata(
+                evidence.metadata_snapshot or {}
+            )
+            source_key = self._reference_key(
+                metadata,
+                citation.retrieval_evidence_id,
+            )
+            section_seen = seen_sources.setdefault(citation.section_key, set())
+            if source_key in section_seen:
+                continue
+            section_seen.add(source_key)
             result.setdefault(citation.section_key, []).append(
                 {
                     "evidence_id": citation.retrieval_evidence_id,
                     "content": evidence.content_snapshot,
                     "source": self._build_source(evidence),
-                    "metadata": evidence.metadata_snapshot or {},
+                    "metadata": metadata,
                 }
             )
         return result
+
+    @staticmethod
+    def _normalize_reference_metadata(metadata: dict) -> dict:
+        normalized = dict(metadata)
+        aliases = {
+            "sourceIdentifier": "source_identifier",
+            "publishedAt": "published_at",
+            "collectedAt": "collected_at",
+            "dataPeriod": "data_period",
+            "sampleSize": "sample_size",
+            "sourceType": "source_type",
+            "displayCode": "display_code",
+        }
+        for api_key, stored_key in aliases.items():
+            if api_key not in normalized and normalized.get(stored_key) is not None:
+                normalized[api_key] = normalized[stored_key]
+        return normalized
+
+    @staticmethod
+    def _reference_key(metadata: dict, evidence_id: int) -> tuple:
+        url = metadata.get("url")
+        if isinstance(url, str) and url.strip():
+            return ("url", url.strip().rstrip("/").lower())
+        source_identifier = metadata.get("sourceIdentifier")
+        if isinstance(source_identifier, str) and source_identifier.strip():
+            return ("sourceIdentifier", source_identifier.strip().lower())
+        source_path = metadata.get("source_path")
+        if isinstance(source_path, str) and source_path.strip():
+            return ("source_path", source_path.strip().lower())
+        descriptive = tuple(
+            str(metadata.get(key) or "").strip().lower()
+            for key in ("title", "publisher", "publishedAt")
+        )
+        if any(descriptive):
+            return ("descriptive", *descriptive)
+        return ("evidence", evidence_id)
 
     def _build_source(self, evidence) -> str:
         metadata = evidence.metadata_snapshot or {}

@@ -1,0 +1,140 @@
+---
+title: OAP 2.1 ERD - Alembic head 20260806_google_identity
+---
+erDiagram
+    users ||--o{ analysis_requests : "ON DELETE CASCADE"
+    users ||--o{ refresh_token_sessions : "ON DELETE CASCADE"
+    users ||--o{ user_consents : "ON DELETE CASCADE"
+    users ||--o{ marketing_consents : "ON DELETE CASCADE"
+    analysis_requests ||--o{ interview_messages : "ON DELETE CASCADE"
+    analysis_requests ||--o| analysis_reports : "ON DELETE CASCADE"
+    analysis_requests ||--o{ retrieval_runs : "ON DELETE CASCADE"
+    analysis_reports o|--o{ retrieval_runs : "ON DELETE SET NULL"
+    analysis_reports ||--o{ report_citations : "ON DELETE CASCADE"
+    retrieval_runs ||--o{ retrieval_evidences : "ON DELETE CASCADE"
+    retrieval_evidences ||--o{ report_citations : "ON DELETE CASCADE"
+
+    users {
+        SERIAL id PK
+        VARCHAR email UK "NOT NULL"
+        VARCHAR password_hash "NOT NULL"
+        VARCHAR name "NOT NULL"
+        VARCHAR google_sub UK "NULL; uq_users_google_sub"
+        VARCHAR status "NOT NULL DEFAULT ACTIVE"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    analysis_requests {
+        SERIAL id PK
+        INTEGER user_id FK "NOT NULL; INDEX(user_id, created_at)"
+        VARCHAR service_name "NOT NULL"
+        VARCHAR one_line_description "NOT NULL"
+        VARCHAR industry "NOT NULL"
+        TEXT main_question "NOT NULL"
+        VARCHAR status "NOT NULL"
+        BOOLEAN interview_completed "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    refresh_token_sessions {
+        SERIAL id PK
+        INTEGER user_id FK "NOT NULL; INDEX; INDEX(user_id, revoked_at)"
+        VARCHAR token_hash UK "NOT NULL"
+        VARCHAR token_family "NOT NULL; INDEX"
+        VARCHAR jti UK "NOT NULL"
+        TIMESTAMPTZ expires_at "NOT NULL; INDEX"
+        TIMESTAMPTZ revoked_at "NULL; INDEX"
+        VARCHAR replaced_by_jti "NULL"
+        VARCHAR revoke_reason "NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    user_consents {
+        BIGSERIAL id PK
+        INTEGER user_id FK "NOT NULL; INDEX(user_id, type, occurred DESC, id DESC)"
+        VARCHAR_20 consent_type "NOT NULL; CHECK TERMS or PRIVACY"
+        VARCHAR_50 document_version "NOT NULL"
+        BOOLEAN is_agreed "NOT NULL"
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        VARCHAR_45 ip_address "NULL"
+        VARCHAR_512 user_agent "NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    marketing_consents {
+        BIGSERIAL id PK
+        INTEGER user_id FK "NOT NULL; INDEX(user_id, occurred DESC, id DESC)"
+        VARCHAR_50 document_version "NOT NULL"
+        BOOLEAN is_agreed "NOT NULL"
+        TIMESTAMPTZ occurred_at "NOT NULL"
+        VARCHAR_45 ip_address "NULL"
+        VARCHAR_512 user_agent "NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    interview_messages {
+        SERIAL id PK
+        INTEGER analysis_request_id FK "NOT NULL"
+        VARCHAR role "NOT NULL"
+        TEXT content "NOT NULL"
+        INTEGER message_order "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    analysis_reports {
+        SERIAL id PK
+        INTEGER analysis_request_id FK,UK "NOT NULL"
+        JSONB service_summary "NOT NULL"
+        JSONB market_analysis "NOT NULL"
+        JSONB competitor_analysis "NOT NULL"
+        JSONB target_customer_analysis "NOT NULL"
+        JSONB marketing_strategy "NOT NULL"
+        JSONB platform_recommendation "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+        TIMESTAMPTZ updated_at "NOT NULL"
+    }
+
+    retrieval_runs {
+        SERIAL id PK
+        INTEGER analysis_request_id FK "NOT NULL"
+        INTEGER analysis_report_id FK "NULL"
+        TEXT query "NOT NULL"
+        VARCHAR_30 retrieval_method "NOT NULL"
+        INTEGER top_k "NOT NULL"
+        VARCHAR_100 embedding_model "NULL"
+        JSONB config_snapshot "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    retrieval_evidences {
+        SERIAL id PK
+        INTEGER retrieval_run_id FK "NOT NULL"
+        BIGINT document_id_snapshot "NOT NULL"
+        INTEGER chunk_index_snapshot "NOT NULL"
+        TEXT content_snapshot "NOT NULL"
+        JSONB metadata_snapshot "NOT NULL"
+        JSONB score_snapshot "NOT NULL"
+        INTEGER rank "NOT NULL"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+    report_citations {
+        SERIAL id PK
+        INTEGER analysis_report_id FK "NOT NULL; INDEX(report, section)"
+        INTEGER retrieval_evidence_id FK "NOT NULL; INDEX"
+        VARCHAR_50 section_key "NOT NULL; CHECK six keys; UNIQUE(report, section, evidence)"
+        TIMESTAMPTZ created_at "NOT NULL"
+    }
+
+%% Additional constraints and indexes represented by the Alembic chain:
+%% user_consents: INDEX(user_id, consent_type, occurred_at DESC, id DESC)
+%% marketing_consents: INDEX(user_id, occurred_at DESC, id DESC)
+%% refresh_token_sessions: INDEX(user_id, revoked_at)
+%% report_citations: UNIQUE(analysis_report_id, section_key, retrieval_evidence_id)
+%% report_citations: CHECK section_key IN
+%%   service_summary, market_analysis, competitor_analysis,
+%%   target_customer_analysis, marketing_strategy, platform_recommendation
+%% report_citations: INDEX(analysis_report_id, section_key)
+%% report_citations: INDEX(retrieval_evidence_id)

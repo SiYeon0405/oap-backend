@@ -14,6 +14,7 @@ class CitationMetadata(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     url: str | None = None
+    title: str | None = None
     sourceIdentifier: str | None = None
     publisher: str | None = None
     publishedAt: datetime | date | None = None

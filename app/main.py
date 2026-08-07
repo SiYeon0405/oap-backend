@@ -8,21 +8,29 @@ from app.api.analysis_request import router as analysis_request_router
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.interview import router as interview_router
-from app.core.config import get_settings
+from app.core.config import get_app_env, get_cors_allowed_origins, get_settings
 from app.database.session import get_database_target, verify_database_connection
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="OAP Backend API")
+
+def get_documentation_options(app_env: str) -> dict[str, str | None]:
+    disabled = app_env == "production"
+    return {
+        "docs_url": None if disabled else "/docs",
+        "redoc_url": None if disabled else "/redoc",
+        "openapi_url": None if disabled else "/openapi.json",
+    }
+
+
+app = FastAPI(
+    title="OAP Backend API",
+    **get_documentation_options(get_app_env()),
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:5173",
-        "https://www.ooap.co.kr",
-    ],
+    allow_origins=get_cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

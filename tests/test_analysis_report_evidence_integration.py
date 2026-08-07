@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from app.ai.report_ai import (
     build_report_evidence_context,
@@ -488,6 +488,78 @@ class ReportCitationServiceTest(unittest.TestCase):
         self.assertEqual(result["market_analysis"], [501, 502])
         self.assertEqual(result["target_customer_analysis"], [])
         self.assertNotIn("not_a_section", result)
+
+    def test_citation_response_normalizes_metadata_and_deduplicates_source(self):
+        evidence_one = SimpleNamespace(
+            id=501,
+            content_snapshot="First chunk",
+            document_id_snapshot=11,
+            chunk_index_snapshot=1,
+            metadata_snapshot={
+                "title": "Verified report",
+                "url": "https://example.com/report/",
+                "publisher": "Example Publisher",
+                "published_at": "2026-07-01",
+            },
+        )
+        evidence_two = SimpleNamespace(
+            id=502,
+            content_snapshot="Second chunk",
+            document_id_snapshot=11,
+            chunk_index_snapshot=2,
+            metadata_snapshot={
+                "title": "Verified report",
+                "url": "https://example.com/report",
+                "publisher": "Example Publisher",
+                "published_at": "2026-07-01",
+            },
+        )
+        repository = MagicMock()
+        repository.find_by_analysis_request_id.return_value = [
+            SimpleNamespace(
+                section_key="market_analysis",
+                retrieval_evidence_id=501,
+                retrieval_evidence=evidence_one,
+            ),
+            SimpleNamespace(
+                section_key="market_analysis",
+                retrieval_evidence_id=502,
+                retrieval_evidence=evidence_two,
+            ),
+        ]
+
+        result = ReportCitationService(
+            repository=repository
+        ).get_citations_by_analysis_request_id(SimpleNamespace(), 101)
+
+        self.assertEqual(len(result["market_analysis"]), 1)
+        reference = result["market_analysis"][0]
+        self.assertEqual(reference["evidence_id"], 501)
+        self.assertEqual(reference["metadata"]["title"], "Verified report")
+        self.assertEqual(reference["metadata"]["publishedAt"], "2026-07-01")
+
+    def test_citation_response_keeps_distinct_evidence_without_source_metadata(self):
+        repository = MagicMock()
+        repository.find_by_analysis_request_id.return_value = [
+            SimpleNamespace(
+                section_key="service_summary",
+                retrieval_evidence_id=evidence_id,
+                retrieval_evidence=SimpleNamespace(
+                    content_snapshot=f"Evidence {evidence_id}",
+                    document_id_snapshot=None,
+                    chunk_index_snapshot=None,
+                    metadata_snapshot={},
+                ),
+            )
+            for evidence_id in (501, 502)
+        ]
+
+        result = ReportCitationService(
+            repository=repository
+        ).get_citations_by_analysis_request_id(SimpleNamespace(), 101)
+
+        self.assertEqual(len(result["service_summary"]), 2)
+        self.assertEqual(result["market_analysis"], [])
 
 
 if __name__ == "__main__":

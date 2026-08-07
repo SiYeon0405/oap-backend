@@ -14,12 +14,14 @@ from fastapi import (
     status,
 )
 
+from app.core.config import get_cors_allowed_origins
 from app.models.user import User
 from app.schemas.auth import (
     AuthActionResponse,
     ConsentItem,
     ConsentResponse,
     DeleteAccountRequest,
+    GoogleLoginRequest,
     LoginRequest,
     LoginResponse,
     MarketingConsentRequest,
@@ -28,20 +30,24 @@ from app.schemas.auth import (
 )
 from app.services.user_consent_service import UserConsentService
 from app.services.auth_service import (
+    AccountDeletionConfigurationError,
     AccountDeletionError,
     AuthService,
     EmailAlreadyExistsError,
+    GoogleEmailConflictError,
     InvalidCredentialsError,
+)
+from app.services.google_identity_service import (
+    GoogleAudienceMismatchError,
+    GoogleEmailNotVerifiedError,
+    GoogleIdentityConfigurationError,
+    GoogleTokenExpiredError,
+    GoogleTokenVerificationError,
+    InvalidGoogleProfileError,
 )
 
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
-ALLOWED_ORIGINS = {
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:5173",
-    "https://www.ooap.co.kr",
-}
 
 
 @dataclass(frozen=True)
@@ -77,7 +83,9 @@ def validate_request_origin(
     if request_origin is None and referer:
         parsed = urlsplit(referer)
         request_origin = f"{parsed.scheme}://{parsed.netloc}"
-    if request_origin is not None and request_origin not in ALLOWED_ORIGINS:
+    if request_origin is not None:
+        request_origin = request_origin.rstrip("/")
+    if request_origin is not None and request_origin not in get_cors_allowed_origins():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Origin not allowed",
@@ -162,6 +170,68 @@ def login(request: LoginRequest, response: Response):
     )
 
 
+@router.post(
+    "/google",
+    response_model=LoginResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(validate_request_origin)],
+)
+def google_login(
+    request: GoogleLoginRequest,
+    response: Response,
+    http_request: Request,
+):
+    try:
+        result = AuthService().google_login(
+            request,
+            ip_address=_client_ip(http_request),
+            user_agent=http_request.headers.get("user-agent"),
+        )
+    except GoogleAudienceMismatchError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google token audience mismatch",
+        ) from exc
+    except GoogleTokenExpiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google token expired",
+        ) from exc
+    except GoogleEmailNotVerifiedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google email is not verified",
+        ) from exc
+    except InvalidGoogleProfileError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Invalid Google profile",
+        ) from exc
+    except GoogleTokenVerificationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token",
+        ) from exc
+    except GoogleEmailConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
+        ) from exc
+    except GoogleIdentityConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google authentication is not configured",
+        ) from exc
+
+    _set_auth_cookies(response, result.access_token, result.refresh_token)
+    return LoginResponse(
+        id=result.user.id,
+        email=result.user.email,
+        name=result.user.name,
+        status=result.user.status,
+    )
+
+
 @router.get(
     "/me",
     response_model=LoginResponse,
@@ -233,7 +303,12 @@ def delete_me(
     except AccountDeletionError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid password",
+            detail="Invalid reauthentication",
+        ) from exc
+    except AccountDeletionConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google reauthentication is not configured",
         ) from exc
     _clear_auth_cookies(response)
     return AuthActionResponse(detail="Account deleted")

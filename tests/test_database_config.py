@@ -3,8 +3,16 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-from app.core.config import ENV_FILE, Settings, get_database_url
+from app.core.config import (
+    ENV_FILE,
+    Settings,
+    get_app_env,
+    get_cors_allowed_origins,
+    get_database_url,
+)
 from app.database.session import get_database_target
 
 
@@ -119,6 +127,78 @@ class DatabaseConfigTest(unittest.TestCase):
     def test_env_file_is_fixed_to_project_root(self):
         self.assertTrue(Path(ENV_FILE).is_absolute())
         self.assertEqual(Path(ENV_FILE).name, ".env")
+
+    def test_cors_origins_default_to_local_development_ports(self):
+        with patch.dict("os.environ", {}, clear=True), patch(
+            "app.core.config.dotenv_values", return_value={}
+        ):
+            self.assertEqual(
+                get_cors_allowed_origins(),
+                [
+                    "http://localhost:3000",
+                    "http://localhost:3001",
+                    "http://localhost:5173",
+                ],
+            )
+
+    def test_cors_origins_parse_trim_normalize_and_deduplicate(self):
+        with patch.dict(
+            "os.environ",
+            {
+                "CORS_ALLOWED_ORIGINS": (
+                    " https://frontend.example/ , ,"
+                    "https://frontend.example,http://localhost:3000/ "
+                )
+            },
+            clear=True,
+        ):
+            self.assertEqual(
+                get_cors_allowed_origins(),
+                ["https://frontend.example", "http://localhost:3000"],
+            )
+
+    def test_cors_origins_reject_wildcard(self):
+        with patch.dict(
+            "os.environ", {"CORS_ALLOWED_ORIGINS": "*"}, clear=True
+        ):
+            with self.assertRaisesRegex(ValueError, "wildcard"):
+                get_cors_allowed_origins()
+
+    def test_cors_middleware_and_sensitive_requests_share_configuration(self):
+        from app.main import app
+
+        cors_middleware = next(
+            middleware
+            for middleware in app.user_middleware
+            if middleware.cls.__name__ == "CORSMiddleware"
+        )
+        self.assertEqual(
+            cors_middleware.kwargs["allow_origins"],
+            get_cors_allowed_origins(),
+        )
+        self.assertTrue(cors_middleware.kwargs["allow_credentials"])
+
+    def test_production_disables_api_documentation_routes(self):
+        from app.main import get_documentation_options
+
+        with patch.dict("os.environ", {"APP_ENV": "production"}):
+            app_env = get_app_env()
+        test_app = FastAPI(**get_documentation_options(app_env))
+        with TestClient(test_app) as client:
+            for path in ("/docs", "/redoc", "/openapi.json"):
+                with self.subTest(path=path):
+                    self.assertEqual(client.get(path).status_code, 404)
+
+    def test_local_keeps_api_documentation_routes(self):
+        from app.main import get_documentation_options
+
+        with patch.dict("os.environ", {"APP_ENV": "local"}):
+            app_env = get_app_env()
+        test_app = FastAPI(**get_documentation_options(app_env))
+        with TestClient(test_app) as client:
+            for path in ("/docs", "/redoc", "/openapi.json"):
+                with self.subTest(path=path):
+                    self.assertEqual(client.get(path).status_code, 200)
 
     def test_alembic_and_application_use_same_database_url_contract(self):
         alembic_env = Path("alembic/env.py").read_text(encoding="utf-8")

@@ -76,6 +76,21 @@ class LoginRequest(BaseModel):
         return value
 
 
+class GoogleLoginRequest(BaseModel):
+    idToken: str = Field(min_length=1)
+    termsAgreed: bool
+    privacyAgreed: bool
+    marketingAgreed: bool = False
+
+    @model_validator(mode="after")
+    def validate_required_consents(self):
+        if not self.termsAgreed:
+            raise ValueError("Terms consent is required")
+        if not self.privacyAgreed:
+            raise ValueError("Privacy consent is required")
+        return self
+
+
 class LoginResponse(BaseModel):
     id: int
     email: str
@@ -84,11 +99,14 @@ class LoginResponse(BaseModel):
 
 
 class DeleteAccountRequest(BaseModel):
-    password: str = Field(min_length=1, max_length=72)
+    password: str | None = Field(default=None, min_length=1, max_length=72)
+    idToken: str | None = Field(default=None, min_length=1)
 
     @field_validator("password")
     @classmethod
-    def validate_password(cls, value: str) -> str:
+    def validate_password(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         if len(value.encode("utf-8")) > 72:
             raise ValueError("Password must not exceed 72 bytes")
         return value

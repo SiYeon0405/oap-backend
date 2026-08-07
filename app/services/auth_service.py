@@ -12,7 +12,17 @@ from sqlalchemy.exc import IntegrityError
 from app.database.session import get_session
 from app.models.refresh_token_session import RefreshTokenSession
 from app.models.user import User
-from app.schemas.auth import DeleteAccountRequest, LoginRequest, SignupRequest
+from app.schemas.auth import (
+    DeleteAccountRequest,
+    GoogleLoginRequest,
+    LoginRequest,
+    SignupRequest,
+)
+from app.services.google_identity_service import (
+    GoogleIdentityService,
+    GoogleIdentityConfigurationError,
+    GoogleTokenVerificationError,
+)
 from app.services.user_consent_service import UserConsentService
 
 
@@ -25,6 +35,14 @@ class InvalidCredentialsError(Exception):
 
 
 class AccountDeletionError(Exception):
+    pass
+
+
+class AccountDeletionConfigurationError(Exception):
+    pass
+
+
+class GoogleEmailConflictError(Exception):
     pass
 
 
@@ -44,6 +62,7 @@ DUMMY_PASSWORD_HASH = bcrypt.hashpw(
     b"invalid-login-password",
     bcrypt.gensalt(),
 )
+GOOGLE_ACCOUNT_PASSWORD_HASH = "!GOOGLE_ACCOUNT_NO_PASSWORD!"
 
 
 class AuthService:
@@ -119,43 +138,96 @@ class AuthService:
             ):
                 raise InvalidCredentialsError
 
-            access_expiry = timedelta(minutes=self.get_access_expire_minutes())
-            refresh_expiry = timedelta(days=self.get_refresh_expire_days())
-            token_family = str(uuid4())
-            refresh_jti = str(uuid4())
-            access_token = self._create_token(
-                user.id,
-                token_type="access",
-                expires_delta=access_expiry,
-                jti=str(uuid4()),
+            return self._issue_login_result(session, user)
+
+    def google_login(
+        self,
+        request: GoogleLoginRequest,
+        *,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        identity_service: GoogleIdentityService | None = None,
+    ) -> LoginResult:
+        identity = (identity_service or GoogleIdentityService()).verify(
+            request.idToken
+        )
+        with get_session() as session:
+            user = session.scalar(
+                select(User).where(User.google_sub == identity.sub)
             )
-            refresh_token = self._create_token(
-                user.id,
-                token_type="refresh",
-                expires_delta=refresh_expiry,
-                jti=refresh_jti,
-                token_family=token_family,
+            if user is not None:
+                if user.status != "ACTIVE" or user.email == LEGACY_SYSTEM_EMAIL:
+                    raise InvalidCredentialsError
+                return self._issue_login_result(session, user)
+
+            if session.scalar(select(User).where(User.email == identity.email)):
+                raise GoogleEmailConflictError
+
+            user = User(
+                email=identity.email,
+                password_hash=GOOGLE_ACCOUNT_PASSWORD_HASH,
+                name=identity.name,
+                google_sub=identity.sub,
+                status="ACTIVE",
             )
-            session.add(
-                RefreshTokenSession(
-                    user_id=user.id,
-                    token_hash=self._hash_refresh_token(refresh_token),
-                    token_family=token_family,
-                    jti=refresh_jti,
-                    expires_at=datetime.now(timezone.utc) + refresh_expiry,
-                )
-            )
+            session.add(user)
             try:
-                session.commit()
-            except IntegrityError:
+                session.flush()
+                UserConsentService().add_initial_consents(
+                    session,
+                    user.id,
+                    terms_agreed=request.termsAgreed,
+                    privacy_agreed=request.privacyAgreed,
+                    marketing_agreed=request.marketingAgreed,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                )
+                return self._issue_login_result(session, user)
+            except IntegrityError as exc:
+                session.rollback()
+                raise GoogleEmailConflictError from exc
+            except Exception:
                 session.rollback()
                 raise
-            session.refresh(user)
-            return LoginResult(
-                user=user,
-                access_token=access_token,
-                refresh_token=refresh_token,
+
+    def _issue_login_result(self, session, user: User) -> LoginResult:
+        access_expiry = timedelta(minutes=self.get_access_expire_minutes())
+        refresh_expiry = timedelta(days=self.get_refresh_expire_days())
+        token_family = str(uuid4())
+        refresh_jti = str(uuid4())
+        access_token = self._create_token(
+            user.id,
+            token_type="access",
+            expires_delta=access_expiry,
+            jti=str(uuid4()),
+        )
+        refresh_token = self._create_token(
+            user.id,
+            token_type="refresh",
+            expires_delta=refresh_expiry,
+            jti=refresh_jti,
+            token_family=token_family,
+        )
+        session.add(
+            RefreshTokenSession(
+                user_id=user.id,
+                token_hash=self._hash_refresh_token(refresh_token),
+                token_family=token_family,
+                jti=refresh_jti,
+                expires_at=datetime.now(timezone.utc) + refresh_expiry,
             )
+        )
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            raise
+        session.refresh(user)
+        return LoginResult(
+            user=user,
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
 
     def get_current_user(self, access_token: str) -> User:
         payload = self._decode_token(access_token, "access")
@@ -295,7 +367,12 @@ class AuthService:
         self,
         user_id: int,
         request: DeleteAccountRequest,
+        *,
+        identity_service: GoogleIdentityService | None = None,
     ) -> None:
+        if (request.password is None) == (request.idToken is None):
+            raise AccountDeletionError
+
         with get_session() as session:
             user = session.scalar(
                 select(User)
@@ -306,7 +383,23 @@ class AuthService:
                 )
                 .with_for_update()
             )
-            if user is None or not self._password_matches(
+            if user is None:
+                raise AccountDeletionError
+
+            if user.google_sub is not None:
+                if request.idToken is None:
+                    raise AccountDeletionError
+                try:
+                    identity = (
+                        identity_service or GoogleIdentityService()
+                    ).verify_recent(request.idToken)
+                except GoogleIdentityConfigurationError as exc:
+                    raise AccountDeletionConfigurationError from exc
+                except GoogleTokenVerificationError as exc:
+                    raise AccountDeletionError from exc
+                if identity.sub != user.google_sub:
+                    raise AccountDeletionError
+            elif request.password is None or not self._password_matches(
                 request.password,
                 user.password_hash,
             ):

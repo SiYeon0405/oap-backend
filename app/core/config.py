@@ -12,10 +12,40 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
 logger = logging.getLogger(__name__)
+APP_ENV_VALUES = {"local", "test", "production"}
+DEFAULT_CORS_ALLOWED_ORIGINS = (
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:5173",
+)
 
 
 class DatabaseConfigurationError(ValueError):
     pass
+
+
+def get_app_env() -> str:
+    value = os.getenv("APP_ENV")
+    if value is None:
+        value = dotenv_values(ENV_FILE).get("APP_ENV", "production")
+    if value not in APP_ENV_VALUES:
+        raise ValueError("APP_ENV must be local, test, or production")
+    return value
+
+
+def get_cors_allowed_origins() -> list[str]:
+    configured = os.getenv("CORS_ALLOWED_ORIGINS")
+    if configured is None:
+        configured = dotenv_values(ENV_FILE).get("CORS_ALLOWED_ORIGINS")
+    values = (
+        configured.split(",")
+        if configured is not None
+        else DEFAULT_CORS_ALLOWED_ORIGINS
+    )
+    origins = list(dict.fromkeys(value.strip().rstrip("/") for value in values if value.strip()))
+    if "*" in origins:
+        raise ValueError("CORS_ALLOWED_ORIGINS must not contain a wildcard")
+    return origins
 
 
 class Settings(BaseSettings):

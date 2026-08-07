@@ -10,6 +10,7 @@ class User(Base):
     email = Column(String, nullable=False, unique=True)
     password_hash = Column(String, nullable=False)
     name = Column(String, nullable=False)
+    google_sub = Column(String, nullable=True, unique=True)
     status = Column(
         String,
         nullable=False,
