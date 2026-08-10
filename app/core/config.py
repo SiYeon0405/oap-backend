@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     database_url: str | None = None
     test_database_url: str | None = None
     openai_api_key: str | None = None
+    naver_ad_api_key: str | None = None
+    naver_ad_secret_key: str | None = None
+    naver_ad_customer_id: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

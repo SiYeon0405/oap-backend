@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
@@ -7,6 +9,10 @@ from app.models.interview_message import InterviewMessage
 from app.repositories.analysis_request_repository import AnalysisRequestRepository
 from app.repositories.interview_message_repository import InterviewMessageRepository
 from app.schemas.analysis_request import AnalysisRequestCreate
+from app.services.keyword_collection_service import KeywordCollectionService
+
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisRequestService:
@@ -14,9 +20,13 @@ class AnalysisRequestService:
         self,
         repository: AnalysisRequestRepository | None = None,
         interview_repository: InterviewMessageRepository | None = None,
+        keyword_collection_service: KeywordCollectionService | None = None,
     ):
         self.repository = repository or AnalysisRequestRepository()
         self.interview_repository = interview_repository or InterviewMessageRepository()
+        self.keyword_collection_service = (
+            keyword_collection_service or KeywordCollectionService()
+        )
 
     @staticmethod
     def get_owned_or_404(session, request_id: int, user_id: int) -> AnalysisRequest:
@@ -66,7 +76,28 @@ class AnalysisRequestService:
                 ),
             )
             session.refresh(saved_analysis_request)
-            return saved_analysis_request
+
+        return saved_analysis_request
+
+    def collect_keywords(
+        self,
+        analysis_request_id: int,
+        service_name: str,
+        industry: str,
+        one_line_description: str,
+    ) -> None:
+        try:
+            self.keyword_collection_service.collect(
+                service_name,
+                industry,
+                one_line_description,
+            )
+        except Exception:
+            logger.warning(
+                "Keyword collection failed for analysis_request_id=%s",
+                analysis_request_id,
+                exc_info=True,
+            )
 
     # TODO: Replace rule-based question generation with OpenAI/AI chatbot call.
     def generate_first_question(

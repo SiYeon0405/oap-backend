@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Path, status
 
 from app.api.auth import get_current_user
 from app.database.session import get_session
@@ -20,9 +20,18 @@ router = APIRouter(prefix="/api/v1/analysis-requests", tags=["analysis-requests"
 )
 def create_analysis_request(
     request: AnalysisRequestCreate,
+    background_tasks: BackgroundTasks,
     current_user=Depends(get_current_user),
 ):
-    analysis_request = AnalysisRequestService().create(request, current_user.id)
+    service = AnalysisRequestService()
+    analysis_request = service.create(request, current_user.id)
+    background_tasks.add_task(
+        service.collect_keywords,
+        analysis_request.id,
+        analysis_request.service_name,
+        analysis_request.industry,
+        analysis_request.one_line_description,
+    )
     return AnalysisRequestCreateResponse(
         requestId=analysis_request.id,
         status=analysis_request.status,
