@@ -129,7 +129,8 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
         system_prompt = request_input[0]["content"]
         self.assertIn("한 질문에서는 한 가지 내용만", system_prompt)
         self.assertIn("짧고 구체적인 예시", system_prompt)
-        self.assertIn("잘 모르겠으면 넘어가도", system_prompt)
+        self.assertIn("해본 적이 없다면 '없다'고", system_prompt)
+        self.assertIn("가장 중요한 한 가지만 동적으로", system_prompt)
 
     def test_interview_fallback_log_does_not_include_key(self):
         secret = "sk-secret-must-not-appear"
@@ -154,7 +155,7 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
             )
         self.assertTrue(result)
         self.assertIn("(예:", result)
-        self.assertIn("잘 모르겠으면", result)
+        self.assertIn("없다고 답해", result)
         log_output = " ".join(logs.output)
         self.assertIn("error_type=AuthenticationError", log_output)
         self.assertIn("error_code=invalid_api_key", log_output)
@@ -166,7 +167,7 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
             with self.subTest(question=question):
                 self.assertEqual(question.count("?"), 1)
                 self.assertIn("(예:", question)
-                self.assertIn("잘 모르겠으면", question)
+                self.assertIn("없다고 답해", question)
 
     def test_interview_fallback_follows_five_unique_steps(self):
         messages = []
