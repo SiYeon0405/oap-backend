@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.api.auth import get_current_user
 from app.database.session import get_session
@@ -22,6 +22,12 @@ def get_reports(
     current_user=Depends(get_current_user),
 ):
     return AnalysisReportService().get_reports(current_user.id, page, size)
+
+
+@reports_router.delete("/{requestId}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_report(requestId: int, current_user=Depends(get_current_user)):
+    AnalysisReportService().delete_report(requestId, current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/report", response_model=AnalysisReportResponse)

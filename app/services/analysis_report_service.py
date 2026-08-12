@@ -43,6 +43,24 @@ class AnalysisReportService:
         )
         self.keyword_repository = keyword_repository or KeywordRepository()
 
+    def delete_report(self, request_id: int, user_id: int) -> None:
+        with get_session() as session:
+            try:
+                deleted = self.repository.delete_owned_report_request(
+                    session,
+                    request_id,
+                    user_id,
+                )
+                if not deleted:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="analysis report not found",
+                    )
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
+
     def get_reports(
         self,
         user_id: int,

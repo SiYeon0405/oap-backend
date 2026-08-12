@@ -7,6 +7,28 @@ from app.models.interview_message import InterviewMessage
 
 
 class AnalysisReportRepository:
+    def delete_owned_report_request(
+        self,
+        session: Session,
+        request_id: int,
+        user_id: int,
+    ) -> bool:
+        analysis_request = session.scalar(
+            select(AnalysisRequest)
+            .join(
+                AnalysisReport,
+                AnalysisReport.analysis_request_id == AnalysisRequest.id,
+            )
+            .where(
+                AnalysisRequest.id == request_id,
+                AnalysisRequest.user_id == user_id,
+            )
+        )
+        if analysis_request is None:
+            return False
+        session.delete(analysis_request)
+        return True
+
     def find_completed_reports(
         self,
         session: Session,

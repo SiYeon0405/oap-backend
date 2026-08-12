@@ -10,7 +10,7 @@
 | Database | PostgreSQL / Supabase |
 | 인증 | JWT Secure HttpOnly Cookie |
 | 기준 | 현재 OpenAPI 3.1, Router/Schema, 실제 HTTP 검증 결과 |
-| OpenAPI operation 수 | 18 |
+| OpenAPI operation 수 | 19 |
 | Postman 요청 수 | 28 |
 
 ## 2. 공통 정보
@@ -474,6 +474,24 @@ Legacy 데이터는 기존 텍스트를 유지하고 `schemaVersion="2.1-legacy"
   "totalPages": 1
 }
 ```
+
+### DELETE /api/v1/reports/{requestId}
+
+- 설명: 로그인 사용자가 자신이 생성한 분석 리포트를 삭제한다. 삭제 성공 후 해당 리포트는 목록 및 단건 조회에서 조회되지 않는다.
+- 인증: 필수 (`access_token` 쿠키)
+- 성공: `204 No Content` (Response body 없음)
+- 오류:
+  - `401` — 인증되지 않은 사용자
+  - `404` — 삭제 대상 리포트가 없거나 접근할 수 없음
+- 쿠키 변경: 없음
+
+Path Parameter:
+
+| 필드 | 타입 | 필수 | 설명 |
+|---|---|---:|---|
+| `requestId` | integer | O | 삭제할 리포트의 분석 요청 ID |
+
+`404`는 존재하지 않거나 현재 사용자가 접근할 수 없거나 삭제할 리포트가 없는 경우를 동일하게 처리한다.
 
 ## 6. Refresh Token 정책
 

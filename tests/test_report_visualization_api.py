@@ -79,10 +79,14 @@ class ReportVisualizationApiTest(unittest.TestCase):
 
     def test_other_user_report_is_404(self):
         app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=7)
-        with patch(
-            "app.api.analysis.AnalysisRequestService.get_owned_or_404",
-            side_effect=HTTPException(status_code=404, detail="not found"),
+        with (
+            patch("app.api.analysis.get_session") as get_session,
+            patch(
+                "app.api.analysis.AnalysisRequestService.get_owned_or_404",
+                side_effect=HTTPException(status_code=404, detail="not found"),
+            ),
         ):
+            get_session.return_value.__enter__.return_value = SimpleNamespace()
             response = TestClient(app).get("/api/v1/analysis-requests/10/report")
         self.assertEqual(response.status_code, 404)
 
@@ -121,6 +125,31 @@ class ReportVisualizationApiTest(unittest.TestCase):
     def test_unauthenticated_report_list_is_401(self):
         response = TestClient(app).get("/api/v1/reports")
         self.assertEqual(response.status_code, 401)
+
+    def test_unauthenticated_report_delete_is_401(self):
+        response = TestClient(app).delete("/api/v1/reports/10")
+        self.assertEqual(response.status_code, 401)
+
+    def test_owner_report_delete_is_204_without_body(self):
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=7)
+        with patch(
+            "app.api.analysis.AnalysisReportService.delete_report"
+        ) as delete_report:
+            response = TestClient(app).delete("/api/v1/reports/10")
+
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+        delete_report.assert_called_once_with(10, 7)
+
+    def test_missing_other_user_or_request_without_report_is_404(self):
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=7)
+        for request_id in (10, 999, 11):
+            with self.subTest(request_id=request_id), patch(
+                "app.api.analysis.AnalysisReportService.delete_report",
+                side_effect=HTTPException(status_code=404, detail="analysis report not found"),
+            ):
+                response = TestClient(app).delete(f"/api/v1/reports/{request_id}")
+            self.assertEqual(response.status_code, 404)
 
     def test_report_list_returns_items_and_pagination(self):
         app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=7)
@@ -222,7 +251,111 @@ class ReportListServiceTest(unittest.TestCase):
         self.assertEqual(repository.args[1:], (7, 1, 20))
 
 
+class ReportDeleteServiceTest(unittest.TestCase):
+    class Session:
+        def __init__(self):
+            self.commits = 0
+            self.rollbacks = 0
+
+        def commit(self):
+            self.commits += 1
+
+        def rollback(self):
+            self.rollbacks += 1
+
+    class SessionContext:
+        def __init__(self, session):
+            self.session = session
+
+        def __enter__(self):
+            return self.session
+
+        def __exit__(self, *args):
+            return False
+
+    def test_delete_commits_parent_request_in_same_session(self):
+        session = self.Session()
+
+        class Repository:
+            def delete_owned_report_request(self, received_session, request_id, user_id):
+                self.args = (received_session, request_id, user_id)
+                return True
+
+        repository = Repository()
+        with patch(
+            "app.services.analysis_report_service.get_session",
+            return_value=self.SessionContext(session),
+        ):
+            AnalysisReportService(repository=repository).delete_report(10, 7)
+
+        self.assertEqual(repository.args, (session, 10, 7))
+        self.assertEqual(session.commits, 1)
+        self.assertEqual(session.rollbacks, 0)
+
+    def test_delete_not_found_rolls_back_and_uses_same_404(self):
+        session = self.Session()
+
+        class Repository:
+            def delete_owned_report_request(self, session, request_id, user_id):
+                return False
+
+        with patch(
+            "app.services.analysis_report_service.get_session",
+            return_value=self.SessionContext(session),
+        ), self.assertRaises(HTTPException) as raised:
+            AnalysisReportService(repository=Repository()).delete_report(10, 7)
+
+        self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(session.commits, 0)
+        self.assertEqual(session.rollbacks, 1)
+
+
 class ReportListRepositoryTest(unittest.TestCase):
+    def test_delete_query_checks_owner_and_report_then_deletes_parent_request(self):
+        analysis_request = SimpleNamespace(id=10)
+
+        class Session:
+            def scalar(self, statement):
+                self.statement = statement
+                return analysis_request
+
+            def delete(self, target):
+                self.deleted = target
+
+        session = Session()
+        deleted = AnalysisReportRepository().delete_owned_report_request(
+            session,
+            request_id=10,
+            user_id=7,
+        )
+
+        sql = str(
+            session.statement.compile(
+                dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        )
+        self.assertTrue(deleted)
+        self.assertIs(session.deleted, analysis_request)
+        self.assertIn("JOIN analysis_reports", sql)
+        self.assertIn("analysis_requests.id = 10", sql)
+        self.assertIn("analysis_requests.user_id = 7", sql)
+
+    def test_delete_query_does_not_delete_when_owner_report_match_is_missing(self):
+        class Session:
+            def scalar(self, statement):
+                return None
+
+            def delete(self, target):
+                raise AssertionError("must not delete")
+
+        self.assertFalse(
+            AnalysisReportRepository().delete_owned_report_request(
+                Session(),
+                request_id=10,
+                user_id=7,
+            )
+        )
+
     def test_query_has_ownership_report_status_order_pagination_and_count(self):
         class Result:
             def all(self):
