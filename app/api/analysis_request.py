@@ -5,7 +5,10 @@ from app.database.session import get_session
 from app.schemas.analysis_request import (
     AnalysisRequestCreate,
     AnalysisRequestCreateResponse,
+    AnalysisRequestNaverKeywordsResponse,
+    NaverKeywordResponse,
 )
+from app.repositories.keyword_repository import KeywordRepository
 from app.schemas.analysis_report import AnalysisStartResponse
 from app.services.analysis_report_service import AnalysisReportService
 from app.services.analysis_request_service import AnalysisRequestService
@@ -36,6 +39,38 @@ def create_analysis_request(
         requestId=analysis_request.id,
         status=analysis_request.status,
     )
+
+
+@router.get(
+    "/{requestId}/naver-keywords",
+    response_model=AnalysisRequestNaverKeywordsResponse,
+)
+def get_naver_keywords(
+    request_id: int = Path(alias="requestId"),
+    current_user=Depends(get_current_user),
+):
+    with get_session() as session:
+        AnalysisRequestService.get_owned_or_404(session, request_id, current_user.id)
+        rows = KeywordRepository().find_metrics_by_analysis_request(session, request_id)
+        return AnalysisRequestNaverKeywordsResponse(
+            requestId=request_id,
+            keywords=[
+                NaverKeywordResponse(
+                    keyword=keyword.keyword,
+                    keywordRaw=keyword.keyword_raw,
+                    seedType=metric.seed_type,
+                    pcCountRaw=metric.pc_count_raw,
+                    mobileCountRaw=metric.mobile_count_raw,
+                    pcCount=metric.pc_count,
+                    mobileCount=metric.mobile_count,
+                    totalCount=metric.total_count,
+                    competition=metric.comp_idx,
+                    source=metric.source,
+                    collectedAt=metric.collected_at,
+                )
+                for metric, keyword in rows
+            ],
+        )
 
 
 @router.post(
