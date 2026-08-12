@@ -33,13 +33,17 @@ class SearchPipelineTest(unittest.TestCase):
 
     def test_collect_deduplicates_rows_appends_metrics_and_sets_time(self):
         repository = MagicMock()
-        repository.add_metrics.side_effect = lambda session, rows: rows
+        repository.add_metrics.side_effect = lambda session, rows, request_id: rows
         client = MagicMock()
         client.fetch_keywords.side_effect = [
             [
                 {"relKeyword": "스타트업 마케팅", "monthlyPcQcCnt": "< 10", "monthlyMobileQcCnt": 20, "compIdx": "중간"},
                 {"relKeyword": "스타트업마케팅", "monthlyPcQcCnt": 10, "monthlyMobileQcCnt": 20, "compIdx": "중간"},
             ],
+            [],
+            [],
+            [],
+            [],
             [],
         ]
         session = MagicMock()
@@ -50,12 +54,19 @@ class SearchPipelineTest(unittest.TestCase):
             extractor=lambda *_: {"문제": "스타트업 마케팅", "해결수단": "마케팅 가이드"},
         )
         with patch("app.services.keyword_collection_service.get_session", return_value=session):
-            rows = service.collect("OAP", "IT/SaaS", "설명")
+            rows = service.collect(101, "OAP", "IT/SaaS", "설명")
 
-        self.assertEqual([len(call.args[0]) for call in client.fetch_keywords.call_args_list], [5, 1])
+        self.assertEqual(
+            [call.args[0] for call in client.fetch_keywords.call_args_list],
+            [["스타트업 마케팅"], ["스타트업 마케팅 툴"], ["스타트업 마케팅 대행사"],
+             ["스타트업 마케팅 추천"], ["스타트업 마케팅 비용"], ["OAP"]],
+        )
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["metric"]["total_count"], 30)
+        self.assertEqual(rows[0]["metric"]["pc_count_raw"], "10")
+        self.assertEqual(rows[0]["seed_type"], "PROBLEM")
         self.assertIsNotNone(rows[0]["metric"]["collected_at"])
+        self.assertEqual(repository.add_metrics.call_args.args[2], 101)
 
     def test_repository_reuses_keyword_and_appends_metric(self):
         engine = create_engine("sqlite://")
@@ -66,6 +77,7 @@ class SearchPipelineTest(unittest.TestCase):
         row = {
             "keyword": "스타트업마케팅",
             "keyword_raw": "스타트업 마케팅",
+            "seed_type": "PROBLEM",
             "metric": {
                 "pc_count_raw": "< 10",
                 "mobile_count_raw": "20",
@@ -79,10 +91,55 @@ class SearchPipelineTest(unittest.TestCase):
         }
         repository = KeywordRepository()
         with Session(engine) as session:
-            repository.add_metrics(session, [row])
-            repository.add_metrics(session, [row])
+            repository.add_metrics(session, [row], 101)
+            row["seed_type"] = "ALTERNATIVE"
+            repository.add_metrics(session, [row], 202)
+            keyword_id = session.scalar(
+                select(Keyword.id).where(Keyword.keyword == "스타트업마케팅")
+            )
+            session.add(
+                KeywordMetric(
+                    keyword_id=keyword_id,
+                    pc_count_raw="< 10",
+                    mobile_count_raw="< 10",
+                    pc_count=5,
+                    mobile_count=5,
+                    total_count=10,
+                    source="naver_searchad_keywordstool",
+                    collected_at=datetime.now(timezone.utc),
+                )
+            )
+            session.commit()
             self.assertEqual(session.scalar(select(func.count()).select_from(Keyword)), 1)
-            self.assertEqual(session.scalar(select(func.count()).select_from(KeywordMetric)), 2)
+            self.assertEqual(session.scalar(select(func.count()).select_from(KeywordMetric)), 3)
+            metrics = session.scalars(
+                select(KeywordMetric)
+                .where(KeywordMetric.analysis_request_id.is_not(None))
+                .order_by(KeywordMetric.id)
+            ).all()
+            self.assertEqual(
+                [(metric.analysis_request_id, metric.seed_type) for metric in metrics],
+                [(101, "PROBLEM"), (202, "ALTERNATIVE")],
+            )
+            self.assertEqual(metrics[0].pc_count_raw, "< 10")
+            self.assertEqual(metrics[0].mobile_count_raw, "20")
+            self.assertEqual(metrics[0].total_count, 25)
+            request_101_metrics = session.scalars(
+                select(KeywordMetric).where(KeywordMetric.analysis_request_id == 101)
+            ).all()
+            self.assertEqual(len(request_101_metrics), 1)
+            self.assertTrue(
+                all(metric.analysis_request_id == 101 for metric in request_101_metrics)
+            )
+            repository_rows = repository.find_metrics_by_analysis_request(session, 101)
+            self.assertEqual(len(repository_rows), 1)
+            self.assertEqual(repository_rows[0][0].analysis_request_id, 101)
+            self.assertEqual(repository_rows[0][1].keyword, "스타트업마케팅")
+            legacy_metric = session.scalar(
+                select(KeywordMetric).where(KeywordMetric.analysis_request_id.is_(None))
+            )
+            self.assertIsNone(legacy_metric.seed_type)
+            self.assertEqual(legacy_metric.pc_count_raw, "< 10")
 
     def test_empty_response_is_a_visible_warning(self):
         response = MagicMock()
@@ -125,6 +182,7 @@ class SearchPipelineTest(unittest.TestCase):
             )
 
         self.assertEqual(saved.id, 7)
+        collection.collect.assert_called_once_with(7, "OAP", "IT/SaaS", "설명")
         interview_repository.save_message.assert_called_once()
 
 

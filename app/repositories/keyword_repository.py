@@ -7,7 +7,12 @@ from app.models.search_keyword import Keyword, KeywordMetric, ReportEvidence
 
 
 class KeywordRepository:
-    def add_metrics(self, session: Session, rows: list[dict]) -> list[KeywordMetric]:
+    def add_metrics(
+        self,
+        session: Session,
+        rows: list[dict],
+        analysis_request_id: int,
+    ) -> list[KeywordMetric]:
         metrics = []
         for row in rows:
             keyword = session.scalar(select(Keyword).where(Keyword.keyword == row["keyword"]))
@@ -19,7 +24,12 @@ class KeywordRepository:
                 )
                 session.add(keyword)
                 session.flush()
-            metric = KeywordMetric(keyword_id=keyword.id, **row["metric"])
+            metric = KeywordMetric(
+                keyword_id=keyword.id,
+                analysis_request_id=analysis_request_id,
+                seed_type=row["seed_type"],
+                **row["metric"],
+            )
             session.add(metric)
             metrics.append(metric)
         session.commit()
@@ -31,6 +41,20 @@ class KeywordRepository:
             .where(KeywordMetric.keyword_id == keyword_id)
             .order_by(KeywordMetric.collected_at.desc())
             .limit(1)
+        )
+
+    def find_metrics_by_analysis_request(
+        self,
+        session: Session,
+        analysis_request_id: int,
+    ) -> list[tuple[KeywordMetric, Keyword]]:
+        return list(
+            session.execute(
+                select(KeywordMetric, Keyword)
+                .join(Keyword, Keyword.id == KeywordMetric.keyword_id)
+                .where(KeywordMetric.analysis_request_id == analysis_request_id)
+                .order_by(KeywordMetric.collected_at.desc(), KeywordMetric.id)
+            ).tuples()
         )
 
     def add_report_evidence(

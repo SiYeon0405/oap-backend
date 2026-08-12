@@ -74,6 +74,16 @@ class FakeInterviewRepository:
         return self.messages
 
 
+class FakeKeywordRepository:
+    def __init__(self, rows=None):
+        self.rows = rows or []
+        self.request_ids = []
+
+    def find_metrics_by_analysis_request(self, session, analysis_request_id):
+        self.request_ids.append(analysis_request_id)
+        return self.rows
+
+
 class FakeRetrievalAuditService:
     def __init__(self, *, fail_record=False, fail_attach=False):
         self.fail_record = fail_record
@@ -176,12 +186,20 @@ def make_messages():
 
 
 class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
-    def build_service(self, request, messages, audit_service, citation_service=None):
+    def build_service(
+        self,
+        request,
+        messages,
+        audit_service,
+        citation_service=None,
+        keyword_repository=None,
+    ):
         return AnalysisReportService(
             repository=FakeRepository(request),
             interview_message_repository=FakeInterviewRepository(messages),
             retrieval_audit_service=audit_service,
             report_citation_service=citation_service or FakeReportCitationService(),
+            keyword_repository=keyword_repository or FakeKeywordRepository(),
         )
 
     def test_start_analysis_records_evidence_and_attaches_saved_report(self):
@@ -223,9 +241,10 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
         record_args, record_kwargs = audit_service.record_calls[0]
         self.assertEqual(record_args[1], 101)
         self.assertIn("service_name: OAP", record_args[2])
-        self.assertEqual(record_args[3], evidences)
+        self.assertEqual(record_args[3][0]["rank"], 1)
+        self.assertIn("Evidence Type: KNOWLEDGE", record_args[3][0]["content"])
         self.assertEqual(record_kwargs["retrieval_method"], "vector")
-        self.assertEqual(record_kwargs["top_k"], 4)
+        self.assertEqual(record_kwargs["top_k"], 1)
         self.assertEqual(len(audit_service.attach_calls), 1)
         attach_args, _ = audit_service.attach_calls[0]
         self.assertEqual(attach_args[1], 501)
@@ -237,6 +256,76 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
         self.assertEqual(citation_kwargs["analysis_report_id"], 901)
         self.assertEqual(citation_kwargs["retrieval_run_id"], 501)
         self.assertEqual(citation_kwargs["section_evidence_ids"], {"market_analysis": [1001]})
+
+    def test_search_metric_keeps_request_ownership_fields_and_audit_evidence_id(self):
+        session = FakeSession()
+        metric = SimpleNamespace(
+            id=71,
+            seed_type="PROBLEM",
+            pc_count=5,
+            pc_count_raw="< 10",
+            mobile_count=20,
+            mobile_count_raw="20",
+            total_count=25,
+            source="naver_searchad_keywordstool",
+            collected_at=__import__("datetime").datetime(
+                2026, 8, 12, 3, 0, tzinfo=__import__("datetime").timezone.utc
+            ),
+        )
+        keyword_repository = FakeKeywordRepository(
+            [(metric, SimpleNamespace(keyword="스타트업마케팅"))]
+        )
+        audit_service = FakeRetrievalAuditService()
+        citation_service = FakeReportCitationService()
+        service = self.build_service(
+            make_request(),
+            make_messages(),
+            audit_service,
+            citation_service,
+            keyword_repository,
+        )
+        knowledge = [{
+            "rank": 1,
+            "content": "Static market guide",
+            "document_id": 11,
+            "chunk_index": 2,
+            "metadata": {},
+            "scores": {"similarity": 0.9},
+        }]
+
+        with (
+            patch("app.services.analysis_report_service.get_session", return_value=session),
+            patch(
+                "app.services.analysis_report_service.retrieve_report_evidences",
+                return_value=knowledge,
+            ),
+            patch(
+                "app.services.analysis_report_service.generate_analysis_report_with_citations",
+                return_value=(REPORT_PAYLOAD, {"market_analysis": [1001]}),
+            ) as generate_mock,
+        ):
+            service.start_analysis(101)
+
+        self.assertEqual(keyword_repository.request_ids, [101])
+        recorded = audit_service.record_calls[0][0][3]
+        self.assertEqual(recorded[0]["metadata"]["evidence_type"], "SEARCH_METRIC")
+        self.assertEqual(recorded[1]["metadata"]["evidence_type"], "KNOWLEDGE")
+        context = generate_mock.call_args.kwargs["evidence_context"]
+        self.assertIn("[Evidence ID: 1001]", context)
+        self.assertIn("Evidence Type: SEARCH_METRIC", context)
+        self.assertIn("검색어: 스타트업마케팅", context)
+        self.assertIn("seed: PROBLEM", context)
+        self.assertIn("PC 검색량: 5", context)
+        self.assertIn("PC raw: < 10", context)
+        self.assertIn("모바일 검색량: 20", context)
+        self.assertIn("모바일 raw: 20", context)
+        self.assertIn("총 검색량: 25", context)
+        self.assertIn("출처: naver_searchad_keywordstool", context)
+        self.assertIn("수집 시각: 2026-08-12T03:00:00+00:00", context)
+        self.assertIn("[Evidence ID: 1002]", context)
+        self.assertIn("Evidence Type: KNOWLEDGE", context)
+        saved_ids = citation_service.save_calls[0][1]["section_evidence_ids"]
+        self.assertEqual(saved_ids["market_analysis"], [1001])
 
     def test_start_analysis_continues_when_no_evidence_is_found(self):
         session = FakeSession()

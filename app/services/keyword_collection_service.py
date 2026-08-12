@@ -89,41 +89,53 @@ class KeywordCollectionService:
         )
         return json.loads(response.choices[0].message.content)
 
-    def collect(self, service_name: str, industry: str, one_line_description: str):
+    def collect(
+        self,
+        analysis_request_id: int,
+        service_name: str,
+        industry: str,
+        one_line_description: str,
+    ):
         extracted = self.extractor(service_name, industry, one_line_description)
         seeds = build_seeds(extracted, service_name, industry)
-        raw_rows = self.naver_client.fetch_keywords([value for _, value in seeds[:5]])
-        raw_rows += self.naver_client.fetch_keywords([seeds[5][1]]) if len(seeds) == 6 else []
         if len(seeds) < 6:
             logger.warning("Seed generation returned only %s seed(s)", len(seeds))
 
         collected_at = datetime.now(timezone.utc)
-        rows_by_keyword = {}
-        for row in raw_rows:
-            raw_keyword = row.get("relKeyword")
-            if not raw_keyword:
-                continue
-            normalized = normalize_keyword(raw_keyword)
-            pc_raw = row.get("monthlyPcQcCnt", 0)
-            mobile_raw = row.get("monthlyMobileQcCnt", 0)
-            pc_count = parse_count(pc_raw)
-            mobile_count = parse_count(mobile_raw)
-            rows_by_keyword[normalized] = {
-                "keyword": normalized,
-                "keyword_raw": raw_keyword,
-                "metric": {
-                    "pc_count_raw": str(pc_raw),
-                    "mobile_count_raw": str(mobile_raw),
-                    "pc_count": pc_count,
-                    "mobile_count": mobile_count,
-                    "total_count": pc_count + mobile_count,
-                    "comp_idx": row.get("compIdx"),
-                    "source": "naver_searchad_keywordstool",
-                    "collected_at": collected_at,
-                },
-            }
+        rows_by_seed_keyword = {}
+        returned_keywords = set()
+        for seed_type, seed_value in seeds:
+            for row in self.naver_client.fetch_keywords([seed_value]):
+                raw_keyword = row.get("relKeyword")
+                if not raw_keyword:
+                    continue
+                normalized = normalize_keyword(raw_keyword)
+                returned_keywords.add(normalized)
+                pc_raw = row.get("monthlyPcQcCnt", 0)
+                mobile_raw = row.get("monthlyMobileQcCnt", 0)
+                pc_count = parse_count(pc_raw)
+                mobile_count = parse_count(mobile_raw)
+                rows_by_seed_keyword[(seed_type, normalized)] = {
+                    "keyword": normalized,
+                    "keyword_raw": raw_keyword,
+                    "seed_type": seed_type,
+                    "metric": {
+                        "pc_count_raw": str(pc_raw),
+                        "mobile_count_raw": str(mobile_raw),
+                        "pc_count": pc_count,
+                        "mobile_count": mobile_count,
+                        "total_count": pc_count + mobile_count,
+                        "comp_idx": row.get("compIdx"),
+                        "source": "naver_searchad_keywordstool",
+                        "collected_at": collected_at,
+                    },
+                }
         requested = {normalize_keyword(value) for _, value in seeds}
-        if not requested.intersection(rows_by_keyword):
+        if not requested.intersection(returned_keywords):
             logger.warning("Naver results did not include a requested seed keyword")
         with get_session() as session:
-            return self.repository.add_metrics(session, list(rows_by_keyword.values()))
+            return self.repository.add_metrics(
+                session,
+                list(rows_by_seed_keyword.values()),
+                analysis_request_id,
+            )

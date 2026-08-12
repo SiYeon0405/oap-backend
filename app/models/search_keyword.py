@@ -16,10 +16,21 @@ class KeywordMetric(Base):
     __tablename__ = "keyword_metrics"
     __table_args__ = (
         Index("ix_keyword_metrics_keyword_collected", "keyword_id", text("collected_at DESC")),
+        Index(
+            "ix_keyword_metrics_request_collected",
+            "analysis_request_id",
+            text("collected_at DESC"),
+        ),
     )
 
     id = Column(Integer, primary_key=True)
     keyword_id = Column(Integer, ForeignKey("keywords.id"), nullable=False)
+    analysis_request_id = Column(
+        Integer,
+        ForeignKey("analysis_requests.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+    seed_type = Column(String, nullable=True)
     pc_count_raw = Column(String, nullable=False)
     mobile_count_raw = Column(String, nullable=False)
     pc_count = Column(Integer, nullable=False)

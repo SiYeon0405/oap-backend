@@ -3,6 +3,7 @@ import logging
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
+from app.ai.interview_question_ai import FALLBACK_QUESTION
 from app.database.session import get_session
 from app.models.analysis_request import AnalysisRequest
 from app.models.interview_message import InterviewMessage
@@ -88,6 +89,7 @@ class AnalysisRequestService:
     ) -> None:
         try:
             self.keyword_collection_service.collect(
+                analysis_request_id,
                 service_name,
                 industry,
                 one_line_description,
@@ -107,8 +109,4 @@ class AnalysisRequestService:
         industry: str,
         main_question: str,
     ) -> str:
-        return (
-            "누가 이 서비스를 가장 많이 쓸까요? "
-            "(예: 혼자 가게를 운영하는 사장님) "
-            "잘 모르겠으면 '잘 모르겠어요'라고 답해도 됩니다."
-        )
+        return FALLBACK_QUESTION

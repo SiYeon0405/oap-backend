@@ -10,6 +10,7 @@ from app.database.session import get_session
 from app.models.analysis_report import AnalysisReport
 from app.repositories.analysis_report_repository import AnalysisReportRepository
 from app.repositories.interview_message_repository import InterviewMessageRepository
+from app.repositories.keyword_repository import KeywordRepository
 from app.schemas.analysis_report import (
     AnalysisReportListItem,
     AnalysisReportListResponse,
@@ -28,6 +29,7 @@ class AnalysisReportService:
         interview_message_repository: InterviewMessageRepository | None = None,
         retrieval_audit_service: RetrievalAuditService | None = None,
         report_citation_service: ReportCitationService | None = None,
+        keyword_repository: KeywordRepository | None = None,
     ):
         self.repository = repository or AnalysisReportRepository()
         self.interview_message_repository = (
@@ -39,6 +41,7 @@ class AnalysisReportService:
         self.report_citation_service = (
             report_citation_service or ReportCitationService()
         )
+        self.keyword_repository = keyword_repository or KeywordRepository()
 
     def get_reports(
         self,
@@ -118,14 +121,37 @@ class AnalysisReportService:
                     analysis_request,
                     interview_messages,
                 )
-                evidences = retrieve_report_evidences(retrieval_query, top_k=4)
+                search_metric_evidences = self._build_search_metric_evidences(
+                    self.keyword_repository.find_metrics_by_analysis_request(
+                        session,
+                        request_id,
+                    )
+                )
+                knowledge_evidences = [
+                    {
+                        **evidence,
+                        "content": f"Evidence Type: KNOWLEDGE\n{evidence['content']}",
+                        "metadata": {
+                            **(evidence.get("metadata") or {}),
+                            "evidence_type": "KNOWLEDGE",
+                        },
+                    }
+                    for evidence in retrieve_report_evidences(retrieval_query, top_k=4)
+                ]
+                evidences = [
+                    {**evidence, "rank": rank}
+                    for rank, evidence in enumerate(
+                        search_metric_evidences + knowledge_evidences,
+                        start=1,
+                    )
+                ]
                 retrieval_run = (
                     self._record_retrieval_audit(
                         session,
                         analysis_request_id=request_id,
                         query=retrieval_query,
                         evidences=evidences,
-                        top_k=4,
+                        top_k=len(evidences),
                     )
                     if evidences
                     else None
@@ -306,6 +332,48 @@ class AnalysisReportService:
             retrieval_method="vector",
             top_k=top_k,
         )
+
+    @staticmethod
+    def _build_search_metric_evidences(metric_rows) -> list[dict]:
+        evidences = []
+        for metric, keyword in metric_rows:
+            collected_at = metric.collected_at.isoformat()
+            metadata = {
+                "evidence_type": "SEARCH_METRIC",
+                "keyword_metric_id": metric.id,
+                "keyword": keyword.keyword,
+                "seed_type": metric.seed_type,
+                "pc_search_volume": metric.pc_count,
+                "pc_search_volume_raw": metric.pc_count_raw,
+                "mobile_search_volume": metric.mobile_count,
+                "mobile_search_volume_raw": metric.mobile_count_raw,
+                "total_search_volume": metric.total_count,
+                "source": metric.source,
+                "collected_at": collected_at,
+            }
+            evidences.append(
+                {
+                    "document_id": None,
+                    "chunk_index": None,
+                    "content": "\n".join(
+                        [
+                            "Evidence Type: SEARCH_METRIC",
+                            f"검색어: {keyword.keyword}",
+                            f"seed: {metric.seed_type}",
+                            f"PC 검색량: {metric.pc_count}",
+                            f"PC raw: {metric.pc_count_raw}",
+                            f"모바일 검색량: {metric.mobile_count}",
+                            f"모바일 raw: {metric.mobile_count_raw}",
+                            f"총 검색량: {metric.total_count}",
+                            f"출처: {metric.source}",
+                            f"수집 시각: {collected_at}",
+                        ]
+                    ),
+                    "metadata": metadata,
+                    "scores": {},
+                }
+            )
+        return evidences
 
     def _attach_retrieval_evidence_ids(
         self,
