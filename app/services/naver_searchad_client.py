@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import json
 import logging
+import math
 import time
 
 import httpx
@@ -41,24 +42,36 @@ class NaverSearchAdClient:
         if not all(credentials):
             raise NaverSearchAdError("Naver SearchAd credentials are not configured")
         api_key, secret, customer_id = credentials
-        timestamp = str(int(time.time() * 1000))
-        headers = {
-            "X-Timestamp": timestamp,
-            "X-API-KEY": api_key,
-            "X-Customer": customer_id,
-            "X-Signature": self._signature(secret, timestamp),
-        }
         client = self.http_client or httpx.Client(timeout=30.0)
         try:
-            response = client.get(
-                BASE_URL + API_PATH,
-                params={
-                    "hintKeywords": ",".join("".join(value.split()) for value in keywords),
-                    "showDetail": "1",
-                },
-                headers=headers,
-            )
-            response.raise_for_status()
+            for attempt in range(3):
+                timestamp = str(int(time.time() * 1000))
+                response = client.get(
+                    BASE_URL + API_PATH,
+                    params={
+                        "hintKeywords": ",".join("".join(value.split()) for value in keywords),
+                        "showDetail": "1",
+                    },
+                    headers={
+                        "X-Timestamp": timestamp,
+                        "X-API-KEY": api_key,
+                        "X-Customer": customer_id,
+                        "X-Signature": self._signature(secret, timestamp),
+                    },
+                )
+                try:
+                    response.raise_for_status()
+                    break
+                except httpx.HTTPStatusError:
+                    if response.status_code != 429 or attempt == 2:
+                        raise
+                    try:
+                        delay = float(response.headers.get("Retry-After", 2 ** attempt))
+                    except ValueError:
+                        delay = 2 ** attempt
+                    if not math.isfinite(delay) or delay < 0:
+                        delay = 2 ** attempt
+                    time.sleep(delay)
             try:
                 rows = response.json()["keywordList"]
             except (json.JSONDecodeError, KeyError, TypeError) as exc:

@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import httpx
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select
@@ -37,6 +38,82 @@ class SearchPipelineTest(unittest.TestCase):
     def test_client_rejects_six_keywords(self):
         with self.assertRaises(ValueError):
             NaverSearchAdClient().fetch_keywords([str(value) for value in range(6)])
+
+    @patch("app.services.naver_searchad_client.get_settings")
+    @patch("app.services.naver_searchad_client.time.sleep")
+    def test_client_retries_429_then_succeeds(self, sleep, get_settings):
+        get_settings.return_value = SimpleNamespace(
+            naver_ad_api_key="key", naver_ad_secret_key="secret", naver_ad_customer_id="customer"
+        )
+        request = httpx.Request("GET", "https://api.searchad.naver.com/keywordstool")
+        rate_limited = httpx.Response(429, headers={"Retry-After": "3"}, request=request)
+        success = httpx.Response(200, json={"keywordList": [{"relKeyword": "OAP"}]}, request=request)
+        http_client = MagicMock()
+        http_client.get.side_effect = [rate_limited, success]
+
+        rows = NaverSearchAdClient(http_client).fetch_keywords(["OAP"])
+
+        self.assertEqual(rows, [{"relKeyword": "OAP"}])
+        self.assertEqual(http_client.get.call_count, 2)
+        sleep.assert_called_once_with(3.0)
+
+    @patch("app.services.naver_searchad_client.get_settings")
+    @patch("app.services.naver_searchad_client.time.sleep")
+    def test_client_ignores_invalid_retry_after(self, sleep, get_settings):
+        get_settings.return_value = SimpleNamespace(
+            naver_ad_api_key="key", naver_ad_secret_key="secret", naver_ad_customer_id="customer"
+        )
+        request = httpx.Request("GET", "https://api.searchad.naver.com/keywordstool")
+        for retry_after in ("-1", "NaN", "Infinity", "-inf", "invalid-string"):
+            with self.subTest(retry_after=retry_after):
+                http_client = MagicMock()
+                http_client.get.side_effect = [
+                    httpx.Response(429, headers={"Retry-After": retry_after}, request=request),
+                    httpx.Response(200, json={"keywordList": [{"relKeyword": "OAP"}]}, request=request),
+                ]
+
+                NaverSearchAdClient(http_client).fetch_keywords(["OAP"])
+
+                sleep.assert_called_once_with(1.0)
+                sleep.reset_mock()
+
+    @patch("app.services.naver_searchad_client.get_settings")
+    @patch("app.services.naver_searchad_client.time.sleep")
+    def test_client_stops_after_three_429_responses(self, sleep, get_settings):
+        get_settings.return_value = SimpleNamespace(
+            naver_ad_api_key="key", naver_ad_secret_key="secret", naver_ad_customer_id="customer"
+        )
+        request = httpx.Request("GET", "https://api.searchad.naver.com/keywordstool")
+        http_client = MagicMock()
+        http_client.get.side_effect = [
+            httpx.Response(429, request=request),
+            httpx.Response(429, request=request),
+            httpx.Response(429, request=request),
+        ]
+
+        with self.assertRaises(NaverSearchAdError):
+            NaverSearchAdClient(http_client).fetch_keywords(["OAP"])
+
+        self.assertEqual(http_client.get.call_count, 3)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0])
+
+    @patch("app.services.naver_searchad_client.get_settings")
+    @patch("app.services.naver_searchad_client.time.sleep")
+    def test_client_does_not_retry_other_http_errors(self, sleep, get_settings):
+        get_settings.return_value = SimpleNamespace(
+            naver_ad_api_key="key", naver_ad_secret_key="secret", naver_ad_customer_id="customer"
+        )
+        for status_code in (401, 403):
+            with self.subTest(status_code=status_code):
+                request = httpx.Request("GET", "https://api.searchad.naver.com/keywordstool")
+                http_client = MagicMock()
+                http_client.get.return_value = httpx.Response(status_code, request=request)
+
+                with self.assertRaises(NaverSearchAdError):
+                    NaverSearchAdClient(http_client).fetch_keywords(["OAP"])
+
+                http_client.get.assert_called_once()
+        sleep.assert_not_called()
 
     def test_collect_deduplicates_rows_appends_metrics_and_sets_time(self):
         repository = MagicMock()
