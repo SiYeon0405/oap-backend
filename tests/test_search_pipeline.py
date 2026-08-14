@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -224,6 +224,54 @@ class SearchPipelineTest(unittest.TestCase):
             )
             self.assertIsNone(legacy_metric.seed_type)
             self.assertEqual(legacy_metric.pc_count_raw, "< 10")
+
+    def test_repository_batches_keywords_and_keeps_metrics_per_seed(self):
+        engine = create_engine("sqlite://")
+        Base.metadata.create_all(
+            engine,
+            tables=[Keyword.__table__, KeywordMetric.__table__],
+        )
+        keyword_selects = []
+
+        def count_keyword_selects(_conn, _cursor, statement, _parameters, _context, _many):
+            if statement.lstrip().upper().startswith("SELECT") and "FROM keywords" in statement:
+                keyword_selects.append(statement)
+
+        event.listen(engine, "before_cursor_execute", count_keyword_selects)
+        collected_at = datetime.now(timezone.utc)
+        rows = [
+            {
+                "keyword": keyword,
+                "keyword_raw": keyword_raw,
+                "seed_type": seed_type,
+                "metric": {
+                    "pc_count_raw": "< 10",
+                    "mobile_count_raw": "20",
+                    "pc_count": 5,
+                    "mobile_count": 20,
+                    "total_count": 25,
+                    "comp_idx": "MEDIUM",
+                    "source": "naver_searchad_keywordstool",
+                    "collected_at": collected_at,
+                },
+            }
+            for keyword, keyword_raw, seed_type in (
+                ("searchads", "search ads", "PROBLEM"),
+                ("agency", "agency", "SOLUTION"),
+                ("searchads", "search ads", "BRAND"),
+            )
+        ]
+
+        with Session(engine) as session:
+            metrics = KeywordRepository().add_metrics(session, rows, 303)
+
+            self.assertEqual(len(keyword_selects), 1)
+            self.assertEqual(session.scalar(select(func.count()).select_from(Keyword)), 2)
+            self.assertEqual(len(metrics), 3)
+            self.assertTrue(all(metric.analysis_request_id == 303 for metric in metrics))
+            self.assertEqual([metric.seed_type for metric in metrics], ["PROBLEM", "SOLUTION", "BRAND"])
+            self.assertTrue(all(metric.pc_count_raw == "< 10" for metric in metrics))
+            self.assertEqual(metrics[0].keyword_id, metrics[2].keyword_id)
 
     def test_empty_response_is_a_visible_warning(self):
         response = MagicMock()
