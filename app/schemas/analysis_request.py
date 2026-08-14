@@ -31,4 +31,5 @@ class NaverKeywordResponse(BaseModel):
 
 class AnalysisRequestNaverKeywordsResponse(BaseModel):
     requestId: int
+    collectionStatus: str
     keywords: list[NaverKeywordResponse]

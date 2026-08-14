@@ -14,6 +14,7 @@ from app.main import app
 from app.models.base import Base
 from app.models.search_keyword import Keyword, KeywordMetric
 from app.repositories.keyword_repository import KeywordRepository
+from app.services.analysis_request_service import AnalysisRequestService
 from app.services.keyword_collection_service import (
     KeywordCollectionService,
     build_seeds,
@@ -289,8 +290,6 @@ class SearchPipelineTest(unittest.TestCase):
             self.assertEqual(NaverSearchAdClient(http_client).fetch_keywords(["OAP"]), [])
 
     def test_analysis_request_survives_keyword_failure(self):
-        from app.services.analysis_request_service import AnalysisRequestService
-
         repository = MagicMock()
         repository.save.side_effect = lambda session, request: setattr(request, "id", 7) or request
         interview_repository = MagicMock()
@@ -305,7 +304,10 @@ class SearchPipelineTest(unittest.TestCase):
         ):
             saved = service.create(request, 1)
 
-        with self.assertLogs("app.services.analysis_request_service", level="WARNING"):
+        with (
+            patch("app.services.analysis_request_service.get_session", return_value=session),
+            self.assertLogs("app.services.analysis_request_service", level="WARNING"),
+        ):
             service.collect_keywords(
                 saved.id,
                 saved.service_name,
@@ -314,8 +316,63 @@ class SearchPipelineTest(unittest.TestCase):
             )
 
         self.assertEqual(saved.id, 7)
+        self.assertEqual(saved.keyword_collection_status, "PENDING")
         collection.collect.assert_called_once_with(7, "OAP", "IT/SaaS", "설명")
         interview_repository.save_message.assert_called_once()
+
+        self.assertEqual(
+            [call.args[2] for call in repository.update_keyword_collection_status.call_args_list],
+            ["COLLECTING", "FAILED"],
+        )
+
+    def test_keyword_collection_status_completes_even_when_empty(self):
+        repository = MagicMock()
+        collection = MagicMock()
+        collection.collect.return_value = []
+        session = MagicMock()
+        session.__enter__.return_value = session
+        service = AnalysisRequestService(
+            repository=repository,
+            interview_repository=MagicMock(),
+            keyword_collection_service=collection,
+        )
+
+        with patch("app.services.analysis_request_service.get_session", return_value=session):
+            service.collect_keywords(8, "OAP", "IT/SaaS", "description")
+
+        self.assertEqual(
+            [call.args[2] for call in repository.update_keyword_collection_status.call_args_list],
+            ["COLLECTING", "COMPLETED"],
+        )
+
+    def test_keyword_collection_status_fails_for_each_pipeline_stage(self):
+        for failure in (
+            RuntimeError("extractor failed"),
+            NaverSearchAdError("naver failed"),
+            RuntimeError("repository failed"),
+        ):
+            with self.subTest(failure=str(failure)):
+                repository = MagicMock()
+                collection = MagicMock()
+                collection.collect.side_effect = failure
+                session = MagicMock()
+                session.__enter__.return_value = session
+                service = AnalysisRequestService(
+                    repository=repository,
+                    interview_repository=MagicMock(),
+                    keyword_collection_service=collection,
+                )
+
+                with (
+                    patch("app.services.analysis_request_service.get_session", return_value=session),
+                    self.assertLogs("app.services.analysis_request_service", level="WARNING"),
+                ):
+                    service.collect_keywords(9, "OAP", "IT/SaaS", "description")
+
+                self.assertEqual(
+                    [call.args[2] for call in repository.update_keyword_collection_status.call_args_list],
+                    ["COLLECTING", "FAILED"],
+                )
 
     def test_owner_gets_only_requested_naver_keywords_with_raw_values(self):
         app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=7)
@@ -352,7 +409,10 @@ class SearchPipelineTest(unittest.TestCase):
         ]
         with (
             patch("app.api.analysis_request.get_session") as get_session,
-            patch("app.api.analysis_request.AnalysisRequestService.get_owned_or_404"),
+            patch(
+                "app.api.analysis_request.AnalysisRequestService.get_owned_or_404",
+                return_value=SimpleNamespace(keyword_collection_status="COMPLETED"),
+            ),
             patch(
                 "app.api.analysis_request.KeywordRepository.find_metrics_by_analysis_request",
                 return_value=rows,
@@ -366,6 +426,7 @@ class SearchPipelineTest(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {
             "requestId": 123,
+            "collectionStatus": "COMPLETED",
             "keywords": [
                 {
                     "keyword": "스타트업마케팅",
@@ -402,7 +463,10 @@ class SearchPipelineTest(unittest.TestCase):
         app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=7)
         with (
             patch("app.api.analysis_request.get_session") as get_session,
-            patch("app.api.analysis_request.AnalysisRequestService.get_owned_or_404"),
+            patch(
+                "app.api.analysis_request.AnalysisRequestService.get_owned_or_404",
+                return_value=SimpleNamespace(keyword_collection_status="COMPLETED"),
+            ),
             patch(
                 "app.api.analysis_request.KeywordRepository.find_metrics_by_analysis_request",
                 return_value=[],
@@ -412,7 +476,10 @@ class SearchPipelineTest(unittest.TestCase):
             response = TestClient(app).get(
                 "/api/v1/analysis-requests/123/naver-keywords"
             )
-        self.assertEqual(response.json(), {"requestId": 123, "keywords": []})
+        self.assertEqual(
+            response.json(),
+            {"requestId": 123, "collectionStatus": "COMPLETED", "keywords": []},
+        )
 
     def test_naver_keywords_requires_authentication(self):
         response = TestClient(app).get(

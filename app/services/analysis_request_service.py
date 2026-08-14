@@ -56,6 +56,7 @@ class AnalysisRequestService:
             industry=request.industry,
             main_question=request.mainQuestion,
             status="INTERVIEWING",
+            keyword_collection_status="PENDING",
             interview_completed=False,
         )
 
@@ -88,17 +89,39 @@ class AnalysisRequestService:
         one_line_description: str,
     ) -> None:
         try:
+            self._update_keyword_collection_status(analysis_request_id, "COLLECTING")
             self.keyword_collection_service.collect(
                 analysis_request_id,
                 service_name,
                 industry,
                 one_line_description,
             )
+            self._update_keyword_collection_status(analysis_request_id, "COMPLETED")
         except Exception:
+            try:
+                self._update_keyword_collection_status(analysis_request_id, "FAILED")
+            except Exception:
+                logger.warning(
+                    "Failed to mark keyword collection as failed for analysis_request_id=%s",
+                    analysis_request_id,
+                    exc_info=True,
+                )
             logger.warning(
                 "Keyword collection failed for analysis_request_id=%s",
                 analysis_request_id,
                 exc_info=True,
+            )
+
+    def _update_keyword_collection_status(
+        self,
+        analysis_request_id: int,
+        status: str,
+    ) -> None:
+        with get_session() as session:
+            self.repository.update_keyword_collection_status(
+                session,
+                analysis_request_id,
+                status,
             )
 
     # TODO: Replace rule-based question generation with OpenAI/AI chatbot call.

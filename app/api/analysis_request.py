@@ -50,10 +50,15 @@ def get_naver_keywords(
     current_user=Depends(get_current_user),
 ):
     with get_session() as session:
-        AnalysisRequestService.get_owned_or_404(session, request_id, current_user.id)
+        analysis_request = AnalysisRequestService.get_owned_or_404(
+            session,
+            request_id,
+            current_user.id,
+        )
         rows = KeywordRepository().find_metrics_by_analysis_request(session, request_id)
         return AnalysisRequestNaverKeywordsResponse(
             requestId=request_id,
+            collectionStatus=analysis_request.keyword_collection_status,
             keywords=[
                 NaverKeywordResponse(
                     keyword=keyword.keyword,
