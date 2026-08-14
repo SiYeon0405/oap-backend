@@ -1,6 +1,6 @@
 """add keyword collection status
 
-Revision ID: 20260814_keyword_collection_status
+Revision ID: 20260814_keyword_status
 Revises: 20260812_metric_ownership
 """
 
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "20260814_keyword_collection_status"
+revision = "20260814_keyword_status"
 down_revision = "20260812_metric_ownership"
 branch_labels = None
 depends_on = None
