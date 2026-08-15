@@ -8,9 +8,11 @@ from app.ai.report_ai import (
     generate_analysis_report_with_citations,
 )
 from app.ai.report_retriever import retrieve_report_evidences
+from app.models.retrieval_audit import RetrievalEvidence
 from app.schemas.analysis_report import AnalysisStartResponse
 from app.services.analysis_report_service import AnalysisReportService
 from app.services.report_citation_service import ReportCitationService
+from app.services.retrieval_audit_service import RetrievalAuditService
 
 
 REPORT_PAYLOAD = {
@@ -326,6 +328,40 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
         self.assertIn("Evidence Type: KNOWLEDGE", context)
         saved_ids = citation_service.save_calls[0][1]["section_evidence_ids"]
         self.assertEqual(saved_ids["market_analysis"], [1001])
+
+    def test_mixed_search_metric_and_knowledge_evidences_keep_document_snapshots(self):
+        repository = MagicMock()
+        service = RetrievalAuditService(repository=repository)
+        evidences = [
+            {
+                "content": "Evidence Type: SEARCH_METRIC",
+                "metadata": {"evidence_type": "SEARCH_METRIC"},
+                "rank": 1,
+            },
+            {
+                "content": "Evidence Type: KNOWLEDGE",
+                "document_id": 11,
+                "chunk_index": 2,
+                "metadata": {"evidence_type": "KNOWLEDGE"},
+                "rank": 2,
+            },
+        ]
+
+        service.record_retrieval(
+            SimpleNamespace(),
+            101,
+            "query",
+            evidences,
+            top_k=2,
+        )
+
+        payload = repository.create_run_with_evidences.call_args.args[1]
+        self.assertIsNone(payload["evidences"][0]["document_id_snapshot"])
+        self.assertIsNone(payload["evidences"][0]["chunk_index_snapshot"])
+        self.assertEqual(payload["evidences"][1]["document_id_snapshot"], 11)
+        self.assertEqual(payload["evidences"][1]["chunk_index_snapshot"], 2)
+        self.assertTrue(RetrievalEvidence.document_id_snapshot.nullable)
+        self.assertTrue(RetrievalEvidence.chunk_index_snapshot.nullable)
 
     def test_start_analysis_continues_when_no_evidence_is_found(self):
         session = FakeSession()

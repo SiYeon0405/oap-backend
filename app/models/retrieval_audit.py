@@ -42,8 +42,8 @@ class RetrievalEvidence(Base):
         ForeignKey("retrieval_runs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    document_id_snapshot = Column(BigInteger, nullable=False)
-    chunk_index_snapshot = Column(Integer, nullable=False)
+    document_id_snapshot = Column(BigInteger, nullable=True)
+    chunk_index_snapshot = Column(Integer, nullable=True)
     content_snapshot = Column(Text, nullable=False)
     metadata_snapshot = Column(JSONB, nullable=False)
     score_snapshot = Column(JSONB, nullable=False)
