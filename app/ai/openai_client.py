@@ -5,7 +5,7 @@ from openai import OpenAI
 from app.core.config import get_openai_api_key
 
 
-MODEL_NAME = "gpt-4.1-mini"
+MODEL_NAME = "gpt-5-mini"
 
 
 @lru_cache
