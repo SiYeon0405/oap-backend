@@ -106,10 +106,7 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
         factory.assert_called_once_with()
 
     def test_interview_uses_common_client(self):
-        question = (
-            "이 서비스 이야기를 해본 사람 중 가장 관심을 보인 분은 누구였나요? "
-            "(예: 같이 창업 준비하는 친구) 아직 확인해본 적이 없다면 없다고 답해도 됩니다."
-        )
+        question = "이 서비스에 대해 다른 사람과 이야기해본 적이 있나요?"
         response = SimpleNamespace(output_text=question)
         client = SimpleNamespace(
             responses=SimpleNamespace(create=MagicMock(return_value=response))
@@ -128,7 +125,10 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
         request_input = client.responses.create.call_args.kwargs["input"]
         system_prompt = request_input[0]["content"]
         self.assertIn("한 질문에서는 한 가지 내용만", system_prompt)
-        self.assertIn("짧고 구체적인 예시", system_prompt)
+        self.assertIn("답변 예시, 답변 후보, 선택지", system_prompt)
+        self.assertIn("특정 답변을 요구하는 안내를 질문에 넣지 마세요", system_prompt)
+        self.assertIn("말하지 않은 경험이나 사실이 있다고 전제하지 마세요", system_prompt)
+        self.assertIn("경험이 있었는지부터 중립적으로", system_prompt)
         self.assertIn("이미 겪은 일과 실제로 해본 일만", system_prompt)
         self.assertIn("예상은 절대 묻지 마세요", system_prompt)
         self.assertIn("이미 확보되었거나 사용자가 없다고 답한 항목은 건너뛰세요", system_prompt)
@@ -160,9 +160,10 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
                 [],
             )
         self.assertTrue(result)
-        self.assertIn("(예:", result)
-        self.assertTrue(any(phrase in result for phrase in ("없다", "없어요", "못 봤어요", "없으면")))
-        self.assertIn("답해도 됩니다", result)
+        self.assertNotIn("(예:", result)
+        self.assertNotIn("예를 들어", result)
+        self.assertNotIn("없으면", result)
+        self.assertNotIn("답해도 됩니다", result)
         self.assertNotIn("넘어가", result)
         log_output = " ".join(logs.output)
         self.assertIn("error_type=AuthenticationError", log_output)
@@ -174,15 +175,13 @@ class OpenAIClientIntegrationTest(unittest.TestCase):
         for question in interview_question_ai.FALLBACK_QUESTIONS:
             with self.subTest(question=question):
                 self.assertTrue(question.strip())
-                self.assertIn("(예:", question)
-                self.assertTrue(
-                    any(
-                        phrase in question
-                        for phrase in ("없다", "없어요", "못 봤어요", "없으면", "아직")
-                    )
-                )
-                self.assertIn("답해도 됩니다", question)
+                self.assertEqual(question.count("?"), 1)
+                self.assertNotIn("(예:", question)
+                self.assertNotIn("예를 들어", question)
+                self.assertNotIn("없으면", question)
+                self.assertNotIn("답해도 됩니다", question)
                 self.assertNotIn("넘어가", question)
+                self.assertTrue(any(word in question for word in ("적이", "직접", "실제로")))
 
     def test_interview_fallback_follows_five_unique_steps(self):
         messages = []
