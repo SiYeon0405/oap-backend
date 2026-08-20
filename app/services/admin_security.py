@@ -1,4 +1,5 @@
 import ipaddress
+import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -207,7 +208,13 @@ def decode_admin_token(
 
 def admin_id_from_payload(payload: dict) -> int:
     try:
-        return int(payload["sub"].removeprefix("admin:"))
+        subject = payload["sub"]
+        if not isinstance(subject, str) or not subject.startswith("admin:"):
+            raise ValueError
+        admin_id = int(subject.removeprefix("admin:"))
+        if admin_id < 1:
+            raise ValueError
+        return admin_id
     except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise AdminTokenError("Invalid administrator token") from exc
 
@@ -226,6 +233,22 @@ def increment_session_version(admin: Any) -> int:
 
 def hash_admin_refresh_token(token: str) -> str:
     return sha256(token.encode()).hexdigest()
+
+
+def admin_login_identifier(email: str, settings: Settings | None = None) -> str:
+    config = get_admin_security_config(settings)
+    return hmac.new(
+        config.jwt_secret.encode(),
+        email.strip().lower().encode(),
+        sha256,
+    ).hexdigest()
+
+
+def csrf_values_match(*values: str | None) -> bool:
+    if not values or any(not value for value in values):
+        return False
+    first = values[0]
+    return all(hmac.compare_digest(first, value) for value in values[1:])
 
 
 def mask_ip_address(value: str | None) -> str | None:
