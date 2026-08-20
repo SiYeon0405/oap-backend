@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     naver_ad_api_key: str | None = None
     naver_ad_secret_key: str | None = None
     naver_ad_customer_id: str | None = None
+    admin_jwt_secret: str | None = None
+    admin_jwt_issuer: str | None = None
+    admin_jwt_audience: str | None = None
+    admin_access_token_expire_minutes: int = 10
+    admin_refresh_token_expire_days: int = 14
+    admin_mfa_encryption_key: str | None = None
+    admin_allowed_origins: str = "https://admin.ooap.co.kr"
+    admin_cookie_secure: bool = True
+    admin_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    admin_cookie_domain: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
@@ -133,6 +143,20 @@ def get_openai_api_key(settings: Settings | None = None) -> str:
             f"OPENAI_API_KEY is not configured for {current_settings.app_env}"
         )
     return selected_key.strip()
+
+
+def get_admin_allowed_origins(settings: Settings | None = None) -> list[str]:
+    configured = (settings or get_settings()).admin_allowed_origins
+    origins = list(
+        dict.fromkeys(
+            value.strip().rstrip("/")
+            for value in configured.split(",")
+            if value.strip()
+        )
+    )
+    if not origins or "*" in origins:
+        raise ValueError("ADMIN_ALLOWED_ORIGINS must contain exact origins")
+    return origins
 
 
 @lru_cache
