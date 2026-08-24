@@ -191,6 +191,7 @@ class AuthService:
                 raise
 
     def _issue_login_result(self, session, user: User) -> LoginResult:
+        user.last_login_at = datetime.now(timezone.utc)
         access_expiry = timedelta(minutes=self.get_access_expire_minutes())
         refresh_expiry = timedelta(days=self.get_refresh_expire_days())
         token_family = str(uuid4())

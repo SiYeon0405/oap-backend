@@ -87,6 +87,19 @@ class AuthRefreshSessionTest(unittest.TestCase):
                 AuthService._hash_refresh_token(result.refresh_token),
             )
 
+    def test_login_updates_last_login_but_refresh_and_me_do_not(self):
+        with self.session_factory() as session:
+            self.assertIsNone(session.scalar(select(User)).last_login_at)
+        result = self._login()
+        with self.session_factory() as session:
+            login_time = session.scalar(select(User)).last_login_at
+        self.assertIsNotNone(login_time)
+        AuthService().get_current_user(result.access_token)
+        refreshed = AuthService().refresh(result.refresh_token)
+        with self.session_factory() as session:
+            self.assertEqual(session.scalar(select(User)).last_login_at, login_time)
+        self.assertTrue(refreshed.access_token)
+
     def test_refresh_rotates_session_and_detects_reuse(self):
         first = self._login()
         second = AuthService().refresh(first.refresh_token)

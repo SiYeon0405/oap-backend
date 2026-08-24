@@ -18,4 +18,5 @@ class User(Base):
         server_default=text("'ACTIVE'"),
     )
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))

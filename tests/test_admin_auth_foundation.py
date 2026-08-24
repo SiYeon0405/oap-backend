@@ -103,7 +103,7 @@ class AdminAuthFoundationTest(unittest.TestCase):
             for table in (AdminMfaChallenge, AdminRefreshTokenSession, AdminAuditLog)
             for index in table.__table__.indexes
         }
-        self.assertEqual(len(indexes), 10)
+        self.assertEqual(len(indexes), 11)
         self.assertIsNotNone(AdminAuditLog.__table__.c.metadata.server_default)
 
     def test_admin_config_is_separate_and_fail_closed(self):

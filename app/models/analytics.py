@@ -31,6 +31,9 @@ class AnalyticsEvent(Base):
             text("occurred_at DESC"),
         ),
         Index("ix_analytics_events_session_occurred", "session_id", "occurred_at"),
+        Index("ix_analytics_events_user_cursor", "user_id", text("occurred_at DESC"), "event_id"),
+        Index("ix_analytics_events_session_cursor", "session_id", text("occurred_at DESC"), "event_id"),
+        Index("ix_analytics_events_result_occurred", "result", text("occurred_at DESC")),
     )
 
     id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
@@ -83,3 +86,24 @@ class AnalyticsSession(Base):
     entry_page = Column(String(64), nullable=True)
     device_type = Column(String(32), nullable=True)
     browser_family = Column(String(64), nullable=True)
+
+
+class AnalyticsAdminHourly(Base):
+    __tablename__ = "analytics_admin_hourly"
+    __table_args__ = (Index("ix_analytics_admin_hourly_bucket", "bucket_start"),)
+
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    bucket_start = Column(DateTime(timezone=True), nullable=False)
+    user_id = Column(Integer, nullable=True)
+    session_id = Column(String(128), nullable=False)
+    event_name = Column(String(64), nullable=False)
+    result = Column(String(16), nullable=True)
+    event_count = Column(Integer, nullable=False)
+
+
+class AnalyticsAdminAggregateState(Base):
+    __tablename__ = "analytics_admin_aggregate_state"
+
+    id = Column(Integer, primary_key=True)
+    data_through = Column(DateTime(timezone=True), nullable=False)
+    refreshed_at = Column(DateTime(timezone=True), nullable=False)

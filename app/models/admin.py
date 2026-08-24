@@ -131,6 +131,7 @@ class AdminAuditLog(Base):
             "target_id",
             text("occurred_at DESC"),
         ),
+        Index("ix_admin_audit_logs_occurred_id", text("occurred_at DESC"), "id"),
     )
 
     id = Column(Integer, primary_key=True)

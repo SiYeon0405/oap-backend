@@ -540,3 +540,415 @@ Path Parameter:
 
 현재 Router/OpenAPI에서 명시적으로 확인되지 않은 400과 500은 이 문서의 API
 계약 오류로 추가하지 않았다.
+
+## 10. 관리자 P0 조회 API
+
+### 10.1 v2.1 변경 이력
+
+| 작성일 | 버전 | 변경 내용 |
+|---|---|---|
+| 2026-08-24 | v2.1 | Analytics 및 관리자 인증 기반 위에 관리자 P0 조회 API 9개, permission별 접근 제어, cursor 페이지네이션, 시간 단위 집계와 `dataThrough`, 사용자 `lastLoginAt`, 오류·감사 로그 조회, 민감정보 노출 제한 추가 |
+
+### 10.2 API 목록
+
+| Method | Path | Permission | 설명 |
+|---|---|---|---|
+| GET | `/api/v1/admin/dashboard/summary` | `dashboard:read` | 핵심 KPI 및 이전 기간 비교 |
+| GET | `/api/v1/admin/dashboard/timeseries` | `dashboard:read` | 시간별·일별 사용 추이 |
+| GET | `/api/v1/admin/users` | `users:read` | 사용자 검색 및 목록 |
+| GET | `/api/v1/admin/users/{userId}` | `users:read` | 사용자 상세 |
+| GET | `/api/v1/admin/users/{userId}/activity` | `users:read` | 사용자 활동 타임라인 |
+| GET | `/api/v1/admin/events` | `events:read` | 전체 이벤트 검색 |
+| GET | `/api/v1/admin/errors` | `errors:read` | 실패 이벤트 목록 |
+| GET | `/api/v1/admin/errors/{errorId}` | `errors:read` | 오류 상세 및 직전 행동 |
+| GET | `/api/v1/admin/audit-logs` | `audit:read` | 관리자 감사 로그 조회 |
+
+P1 API와 관리자 쓰기 API는 구현 완료 목록에 포함하지 않는다.
+
+### 10.3 공통 인증·보안 계약
+
+- 관리자 Access Cookie가 필수이며 일반 사용자 Access Cookie는 관리자 인증으로 인정하지 않는다.
+- 비활성 관리자는 401, permission 부족은 403을 반환한다.
+- GET 조회는 CSRF 검증 대상이 아니며 기존 관리자 Origin/CORS 정책을 유지한다.
+- 응답 헤더는 `Cache-Control: private, no-store`, `Pragma: no-cache`다.
+- permission:
+  - summary/timeseries: `dashboard:read`
+  - users 목록/상세/activity: `users:read`
+  - events: `events:read`
+  - errors 목록/상세: `errors:read`
+  - audit-logs: `audit:read`
+- role:
+  - `analyst`: dashboard, events, errors
+  - `support`: dashboard, users, events, errors
+  - `super_admin`: 위 권한과 audit
+
+관리자 조회 오류는 기존 관리자 오류 envelope를 재사용한다.
+
+```json
+{
+  "error": {
+    "code": "ADMIN_QUERY_INVALID",
+    "message": "조회 조건이 올바르지 않습니다.",
+    "requestId": "http_req_xxx"
+  }
+}
+```
+
+가능한 code는 `ADMIN_SESSION_EXPIRED`, `ADMIN_PERMISSION_DENIED`,
+`ADMIN_RESOURCE_NOT_FOUND`, `ADMIN_QUERY_INVALID`, `ADMIN_RATE_LIMITED`,
+`ADMIN_INTERNAL_ERROR`다.
+
+### 10.4 기간·timezone·cursor 계약
+
+- `from`: 기본 최근 7일, inclusive
+- `to`: 기본 현재 시각, exclusive
+- 최대 기간: 90일
+- `timezone`: 기본 `Asia/Seoul`, 집계 경계 계산에 사용
+- datetime 응답: UTC
+- `interval`: `hour | day`; 생략 시 48시간 이하는 hour, 그 외에는 day
+- 잘못된 기간/timezone: 422 `ADMIN_QUERY_INVALID`
+- 목록 `limit`: 기본 50, 최소 1, 최대 100
+- `cursor`: 정렬값과 unique ID를 포함하는 opaque cursor
+- offset pagination은 사용하지 않는다.
+
+```json
+{
+  "items": [],
+  "page": {
+    "nextCursor": null,
+    "hasNext": false
+  }
+}
+```
+
+### 10.5 GET /api/v1/admin/dashboard/summary
+
+- 설명: 기간 핵심 KPI와 같은 길이의 직전 기간을 비교한다.
+- Permission: `dashboard:read`
+- Query: `from?: datetime`, `to?: datetime`, `timezone?: string`
+- Success: `200 DashboardSummaryResponse`
+- 오류: 공통 관리자 오류
+
+```json
+{
+  "range": {"from": "2026-08-17T00:00:00Z", "to": "2026-08-24T00:00:00Z", "timezone": "Asia/Seoul"},
+  "generatedAt": "2026-08-24T00:00:01Z",
+  "dataThrough": null,
+  "metrics": {
+    "activeUsers": {"current": 0, "previous": 0, "changeRate": null},
+    "anonymousSessions": {"current": 0, "previous": 0, "changeRate": null},
+    "totalSessions": {"current": 0, "previous": 0, "changeRate": null},
+    "totalEvents": {"current": 0, "previous": 0, "changeRate": null},
+    "analysesCreated": {"current": 0, "previous": 0, "changeRate": null},
+    "reportsViewed": {"current": 0, "previous": 0, "changeRate": null},
+    "failures": {"current": 0, "previous": 0, "changeRate": null}
+  }
+}
+```
+
+| Response field | 타입 | 설명 |
+|---|---|---|
+| `range` | object | `from`, `to`, `timezone` |
+| `generatedAt` | datetime | 응답 생성 시각 |
+| `dataThrough` | datetime/null | 마지막 성공 집계 cutoff; 최초 집계 전 null |
+| `metrics.*.current` | integer | 현재 기간 값 |
+| `metrics.*.previous` | integer | 직전 동일 길이 기간 값 |
+| `metrics.*.changeRate` | number/null | 백분율이 아닌 비율; previous가 0이면 null |
+
+KPI는 다음과 같다.
+
+- `activeUsers`: 기간 내 `user_id`가 있는 distinct 사용자
+- `anonymousSessions`: 로그인 사용자와 연결되지 않은 distinct session
+- `totalSessions`: distinct session
+- `totalEvents`: 멱등 처리 후 저장된 event row
+- `analysesCreated`: `analysis_created`
+- `reportsViewed`: `report_viewed`
+- `failures`: `analysis_create_failed`, `report_download_failed`, `operation_failed`
+
+`login_failed`는 업무 실패 통계에서 제외한다.
+
+### 10.6 GET /api/v1/admin/dashboard/timeseries
+
+- 설명: timezone 경계를 적용한 시간별·일별 KPI 추이를 조회한다.
+- Permission: `dashboard:read`
+- Query: `from?`, `to?`, `timezone?`, `interval?: hour | day`
+- Success: `200 DashboardTimeseriesResponse`
+- 오류: 공통 관리자 오류
+
+```json
+{
+  "range": {"from": "2026-08-23T00:00:00Z", "to": "2026-08-24T00:00:00Z", "timezone": "Asia/Seoul", "interval": "hour"},
+  "generatedAt": "2026-08-24T00:00:01Z",
+  "dataThrough": null,
+  "points": [
+    {"bucketStart": "2026-08-23T00:00:00Z", "activeUsers": 0, "totalSessions": 0, "totalEvents": 0, "analysesCreated": 0, "reportsViewed": 0, "failures": 0}
+  ]
+}
+```
+
+| Response field | 타입 | 설명 |
+|---|---|---|
+| `range.interval` | hour/day | 집계 간격 |
+| `generatedAt` | datetime | 응답 생성 시각 |
+| `dataThrough` | datetime/null | 마지막 성공 집계 cutoff |
+| `points[].bucketStart` | datetime | UTC bucket 시작 |
+| `points[]` KPI | integer | 해당 bucket의 실제 집계값 |
+
+### 10.7 GET /api/v1/admin/users
+
+- 설명: 사용자와 기간 내 활동 집계를 검색·정렬한다.
+- Permission: `users:read`
+- Query: `from?`, `to?`, `timezone?`, `query?`, `status?: active | inactive | all`,
+  `sort?: lastActivityAt:desc | lastActivityAt:asc | createdAt:desc`, `limit?`, `cursor?`
+- Success: `200 PageResponse`
+- 오류: 공통 관리자 오류
+
+```json
+{
+  "items": [{
+    "id": 123,
+    "name": "사용자",
+    "email": "user@example.com",
+    "status": "active",
+    "createdAt": "2026-08-01T00:00:00Z",
+    "lastLoginAt": null,
+    "lastActivityAt": null,
+    "sessionCount": 0,
+    "eventCount": 0,
+    "analysisCreatedCount": 0,
+    "failureCount": 0
+  }],
+  "page": {"nextCursor": null, "hasNext": false}
+}
+```
+
+| Response field | 타입 | 설명 |
+|---|---|---|
+| `items[].id` | integer | 사용자 ID |
+| `items[].status` | active/inactive | ACTIVE는 active, 그 외 또는 null은 inactive |
+| `items[].lastLoginAt` | datetime/null | 마지막 로그인 시각 |
+| `items[].lastActivityAt` | datetime/null | 기간 내 마지막 활동 시각 |
+| 집계 count | integer | 활동이 없으면 0이며 활동 없는 사용자도 포함 가능 |
+| `page` | object | `nextCursor`, `hasNext` |
+
+질문·인터뷰 답변·서비스 설명·보고서 본문은 포함하지 않는다.
+
+### 10.8 GET /api/v1/admin/users/{userId}
+
+- 설명: 사용자 기본 정보와 기간 집계를 조회한다.
+- Permission: `users:read`
+- Path Variables: `userId: integer`
+- Query: `from?`, `to?`, `timezone?`
+- Success: `200 UserDetailResponse`
+- 오류: 공통 관리자 오류, `ADMIN_RESOURCE_NOT_FOUND`
+
+```json
+{
+  "user": {"id": 123, "name": "사용자", "email": "user@example.com", "status": "active", "createdAt": "2026-08-01T00:00:00Z", "lastLoginAt": null, "lastActivityAt": null},
+  "range": {"from": "2026-08-17T00:00:00Z", "to": "2026-08-24T00:00:00Z", "timezone": "Asia/Seoul"},
+  "metrics": {"sessionCount": 0, "eventCount": 0, "analysisCreatedCount": 0, "reportViewedCount": 0, "failureCount": 0}
+}
+```
+
+| Response field | 타입 | 설명 |
+|---|---|---|
+| `user` | object | integer ID와 사용자 공개 필드 |
+| `user.lastLoginAt`, `user.lastActivityAt` | datetime/null | 로그인·활동이 없으면 null |
+| `range` | object | 조회 기간 |
+| `metrics` | object | 기간 내 세션·이벤트·분석·보고서·실패 count |
+
+### 10.9 GET /api/v1/admin/users/{userId}/activity
+
+- 설명: 사용자 활동 이벤트를 최신순으로 조회한다.
+- Permission: `users:read`
+- Path Variables: `userId: integer`
+- Query: `from?`, `to?`, `timezone?`, `eventName?`, `limit?`, `cursor?`
+- Success: `200 PageResponse`
+- 오류: 공통 관리자 오류, `ADMIN_RESOURCE_NOT_FOUND`
+
+```json
+{
+  "items": [{
+    "eventId": "10000000-0000-0000-0000-000000000001",
+    "eventName": "analysis_created",
+    "occurredAt": "2026-08-23T00:00:00Z",
+    "receivedAt": "2026-08-23T00:00:01Z",
+    "sessionId": "session-example",
+    "page": {"path": "/analysis/{requestId}", "name": "analysis"},
+    "target": null,
+    "result": "success",
+    "properties": {}
+  }],
+  "page": {"nextCursor": null, "hasNext": false}
+}
+```
+
+Response item은 `eventId`, `eventName`, `occurredAt`, `receivedAt`,
+`sessionId`, `page`, `target`, `result`, allowlist `properties`로 구성된다.
+
+### 10.10 GET /api/v1/admin/events
+
+- 설명: 전체 이벤트를 조건별로 검색한다.
+- Permission: `events:read`
+- Query: `from?`, `to?`, `timezone?`, `eventName?`, `userId?`,
+  `sessionId?`, `result?: success | failure | none`, `pagePath?`, `limit?`, `cursor?`
+- Success: `200 PageResponse`
+- 오류: 공통 관리자 오류
+
+```json
+{
+  "items": [{
+    "eventId": "10000000-0000-0000-0000-000000000001",
+    "eventName": "report_viewed",
+    "eventVersion": 1,
+    "occurredAt": "2026-08-23T00:00:00Z",
+    "receivedAt": "2026-08-23T00:00:01Z",
+    "user": {"id": 123, "name": "사용자", "email": "user@example.com"},
+    "sessionId": "session-example",
+    "page": null,
+    "target": null,
+    "result": "success",
+    "properties": {}
+  }],
+  "page": {"nextCursor": null, "hasNext": false}
+}
+```
+
+Response item은 위 필드로 구성되며 익명 event의 `user`는 null이다.
+`properties`는 안전 allowlist만 반환한다.
+
+### 10.11 GET /api/v1/admin/errors
+
+- 설명: 업무 실패 이벤트를 조회하고 같은 오류 그룹의 기간 내 건수를 제공한다.
+- Permission: `errors:read`
+- Query: `from?`, `to?`, `timezone?`, `errorCode?`, `operation?`,
+  `userId?`, `limit?`, `cursor?`
+- Success: `200 PageResponse`
+- 오류: 공통 관리자 오류
+
+```json
+{
+  "items": [{
+    "errorId": "20000000-0000-0000-0000-000000000001",
+    "occurredAt": "2026-08-23T00:00:00Z",
+    "eventName": "operation_failed",
+    "operation": "export",
+    "errorCode": "OPERATION_FAILED",
+    "message": "요청을 처리하지 못했습니다.",
+    "requestId": null,
+    "user": null,
+    "sessionId": "session-example",
+    "page": {"path": "/analysis/{requestId}", "name": "analysis"},
+    "sameErrorCountInRange": 1
+  }],
+  "page": {"nextCursor": null, "hasNext": false}
+}
+```
+
+Response item은 위 필드로 구성된다. 대상은 세 failure event뿐이며 operation이 없는
+`operation_failed`는 제외한다. grouping key는
+`eventName + operation + errorCode + page.name`이다.
+
+### 10.12 GET /api/v1/admin/errors/{errorId}
+
+- 설명: 오류와 같은 session의 직전 행동을 조회한다.
+- Permission: `errors:read`
+- Path Variables: `errorId: UUID`
+- Success: `200 ErrorDetailResponse`
+- 오류: 공통 관리자 오류, `ADMIN_RESOURCE_NOT_FOUND`
+
+```json
+{
+  "error": {
+    "errorId": "20000000-0000-0000-0000-000000000001",
+    "occurredAt": "2026-08-23T00:00:00Z",
+    "eventName": "operation_failed",
+    "operation": "export",
+    "errorCode": "OPERATION_FAILED",
+    "message": "요청을 처리하지 못했습니다.",
+    "requestId": null,
+    "user": null,
+    "sessionId": "session-example",
+    "page": null,
+    "safeMetadata": {"requestId": null}
+  },
+  "previousEvents": []
+}
+```
+
+| Response field | 타입 | 설명 |
+|---|---|---|
+| `error` | object | 일반화된 오류 DTO |
+| `error.requestId` | string/null | 데이터가 없으면 null |
+| `error.safeMetadata` | object | allowlist DTO |
+| `previousEvents` | array | 동일 session에서 오류 이전 최대 20개 |
+
+고정된 일반화 message만 반환하며 exception 원문과 stack trace는 노출하지 않는다.
+
+### 10.13 GET /api/v1/admin/audit-logs
+
+- 설명: 관리자 감사 로그를 조회하며 조회 자체도 `admin_audit_logs_viewed`로 기록한다.
+- Permission: `audit:read`(super_admin)
+- Query: `from?`, `to?`, `timezone?`, `adminId?`, `action?`,
+  `success?`, `limit?`, `cursor?`
+- Success: `200 PageResponse`
+- 오류: 공통 관리자 오류
+
+```json
+{
+  "items": [{
+    "id": 1,
+    "occurredAt": "2026-08-23T00:00:00Z",
+    "admin": {"id": 1, "name": "관리자", "email": "admin@example.com"},
+    "action": "admin_audit_logs_viewed",
+    "success": true,
+    "target": null,
+    "requestId": "http_req_xxx",
+    "maskedIp": "127.0.0.0",
+    "metadata": {}
+  }],
+  "page": {"nextCursor": null, "hasNext": false}
+}
+```
+
+Response item은 위 필드로 구성된다. `metadata`는 allowlist만 반환하며 원문 IP 대신
+`maskedIp`를 반환한다.
+
+### 10.14 개인정보 및 내부정보 제한
+
+어떤 관리자 조회 응답에도 다음을 포함하지 않는다.
+
+- password/password hash
+- Access/Refresh token, Cookie/Authorization/CSRF
+- MFA secret/OTP
+- 사용자 질문·인터뷰 답변, 서비스 설명 원문, 보고서 본문
+- 원문 IP
+- stack trace/SQL/환경변수/서버 경로
+
+### 10.15 집계 운영 참고
+
+최초 또는 수동 재집계:
+
+```shell
+python -m app.cli.refresh_admin_analytics
+```
+
+권장 갱신 주기는 최대 15분이다.
+
+1. Alembic migration 적용
+2. 최초 집계 실행
+3. 기존 운영 스케줄러에 최대 15분 간격 등록
+
+### 10.16 개발·검증 참고
+
+- 영향 테스트: 36 passed, 1 skipped
+- 전체 테스트: 208 passed, 1 skipped, 83 subtests
+- P0 OpenAPI 9개 확인
+- Alembic single head: `20260824_admin_read`
+- PostgreSQL 17.10에서 신규 revision upgrade/downgrade/re-upgrade 성공
+- 집계 CLI 멱등성 확인
+- PostgreSQL JSON/group/cursor 실제 쿼리 확인
+- `git diff --check` 성공
+- 로컬 pgvector 부재로 전체 fresh migration은 완료하지 못했다. 신규 P0 revision은
+  parent revision baseline에서 검증했다.
+- 운영 적용, 배포, commit/push는 이 문서 갱신 단계에서 수행하지 않았다.

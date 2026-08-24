@@ -225,6 +225,9 @@ class AnalyticsServiceTest(unittest.TestCase):
                 "ix_analytics_events_occurred_name",
                 "ix_analytics_events_user_occurred",
                 "ix_analytics_events_session_occurred",
+                "ix_analytics_events_user_cursor",
+                "ix_analytics_events_session_cursor",
+                "ix_analytics_events_result_occurred",
             },
         )
         self.assertEqual(
