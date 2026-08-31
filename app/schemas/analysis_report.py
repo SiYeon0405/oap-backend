@@ -193,6 +193,37 @@ class ExecutionPhase(ContractModel):
     evidenceIds: list[int] = Field(default_factory=list)
 
 
+class MarketingContentPost(ContractModel):
+    id: str
+    sequence: int
+    dayLabel: str
+    objective: str
+    hook: str
+    body: str
+    cta: str | None = None
+    hashtags: list[str] = Field(default_factory=list)
+    evidenceIds: list[int] = Field(default_factory=list)
+    caution: str | None = None
+
+
+class MarketingContentSeries(ContractModel):
+    id: str
+    platform: str
+    platformLabel: str
+    brandDisplayName: str
+    seriesTitle: str
+    cadence: str
+    posts: list[MarketingContentPost] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_post_sequence(self):
+        sequences = [post.sequence for post in self.posts]
+        if len(sequences) != len(set(sequences)):
+            raise ValueError("post sequences must be unique within a content series")
+        self.posts.sort(key=lambda post: post.sequence)
+        return self
+
+
 class ChannelScoreBreakdown(ContractModel):
     audienceFit: Score = Field(default=None, ge=0, le=100)
     contentFormatFit: Score = Field(default=None, ge=0, le=100)
@@ -366,6 +397,7 @@ class TargetCustomerAnalysisSection(ReportSection):
 
 class MarketingStrategySection(ReportSection, P2Fields):
     executionPhases: list[ExecutionPhase] = Field(default_factory=list)
+    contentSeries: list[MarketingContentSeries] = Field(default_factory=list)
 
 
 class PlatformRecommendationSection(ReportSection, P2Fields):

@@ -2,6 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from pydantic import ValidationError
+
 from app.ai.report_ai import (
     build_report_evidence_context,
     build_report_retrieval_query,
@@ -9,7 +11,7 @@ from app.ai.report_ai import (
 )
 from app.ai.report_retriever import retrieve_report_evidences
 from app.models.retrieval_audit import RetrievalEvidence
-from app.schemas.analysis_report import AnalysisStartResponse
+from app.schemas.analysis_report import AnalysisStartResponse, MarketingStrategySection
 from app.services.analysis_report_service import AnalysisReportService
 from app.services.report_citation_service import ReportCitationService
 from app.services.retrieval_audit_service import RetrievalAuditService
@@ -187,6 +189,94 @@ def make_messages():
     ]
 
 
+def make_content_series(posts):
+    return {
+        "id": "series-1",
+        "platform": "instagram",
+        "platformLabel": "Instagram",
+        "brandDisplayName": "Generated Brand",
+        "seriesTitle": "Launch series",
+        "cadence": "Every other day",
+        "posts": posts,
+    }
+
+
+def make_content_post(post_id, sequence, **overrides):
+    return {
+        "id": post_id,
+        "sequence": sequence,
+        "dayLabel": f"Day {sequence}",
+        "objective": "Build awareness",
+        "hook": "A concrete hook",
+        "body": "A copy-ready post body",
+        "cta": None,
+        "hashtags": ["#OAP"],
+        "evidenceIds": [],
+        "caution": None,
+        **overrides,
+    }
+
+
+class MarketingContentSeriesSchemaTest(unittest.TestCase):
+    def test_legacy_strategy_defaults_content_series_and_preserves_fields(self):
+        strategy = MarketingStrategySection.model_validate({
+            "title": "Marketing",
+            "summary": "Summary",
+            "insights": ["Insight"],
+            "recommendations": ["Recommendation"],
+            "executionPhases": [],
+        })
+
+        self.assertEqual(strategy.contentSeries, [])
+        self.assertEqual(strategy.summary, "Summary")
+        self.assertEqual(strategy.insights, ["Insight"])
+        self.assertEqual(strategy.recommendations, ["Recommendation"])
+        self.assertEqual(strategy.executionPhases, [])
+
+    def test_content_series_serializes_camel_case_nulls_and_sorted_posts(self):
+        strategy = MarketingStrategySection.model_validate({
+            "contentSeries": [make_content_series([
+                make_content_post("post-2", 2),
+                make_content_post("post-1", 1),
+            ])],
+        }).model_dump(mode="json")
+
+        series = strategy["contentSeries"][0]
+        self.assertEqual([post["sequence"] for post in series["posts"]], [1, 2])
+        self.assertIsNone(series["posts"][0]["cta"])
+        self.assertIsNone(series["posts"][0]["caution"])
+        self.assertIn("brandDisplayName", series)
+        self.assertIn("dayLabel", series["posts"][0])
+        self.assertIn("evidenceIds", series["posts"][0])
+
+    def test_duplicate_sequence_is_rejected_only_within_same_series(self):
+        duplicate_posts = [
+            make_content_post("post-1", 1),
+            make_content_post("post-2", 1),
+        ]
+        with self.assertRaises(ValidationError):
+            MarketingStrategySection.model_validate({
+                "contentSeries": [make_content_series(duplicate_posts)],
+            })
+
+        second_series = make_content_series([make_content_post("post-2", 1)])
+        second_series["id"] = "series-2"
+        strategy = MarketingStrategySection.model_validate({
+            "contentSeries": [
+                make_content_series([make_content_post("post-1", 1)]),
+                second_series,
+            ],
+        })
+        self.assertEqual(len(strategy.contentSeries), 2)
+
+    def test_post_count_is_not_fixed_to_three(self):
+        strategy = MarketingStrategySection.model_validate({
+            "contentSeries": [make_content_series([make_content_post("post-1", 1)])],
+        })
+
+        self.assertEqual(len(strategy.contentSeries[0].posts), 1)
+
+
 class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
     def build_service(
         self,
@@ -258,6 +348,31 @@ class AnalysisReportEvidenceIntegrationTest(unittest.TestCase):
         self.assertEqual(citation_kwargs["analysis_report_id"], 901)
         self.assertEqual(citation_kwargs["retrieval_run_id"], 501)
         self.assertEqual(citation_kwargs["section_evidence_ids"], {"market_analysis": [1001]})
+
+    def test_start_analysis_overrides_content_series_brand_display_name(self):
+        session = FakeSession()
+        request = make_request()
+        service = self.build_service(request, make_messages(), FakeRetrievalAuditService())
+        report_payload = {
+            **REPORT_PAYLOAD,
+            "marketing_strategy": {
+                "title": "marketing",
+                "contentSeries": [make_content_series([make_content_post("post-1", 1)])],
+            },
+        }
+
+        with (
+            patch("app.services.analysis_report_service.get_session", return_value=session),
+            patch("app.services.analysis_report_service.retrieve_report_evidences", return_value=[]),
+            patch(
+                "app.services.analysis_report_service.generate_analysis_report_with_citations",
+                return_value=(report_payload, {}),
+            ),
+        ):
+            service.start_analysis(101)
+
+        saved_series = service.repository.saved_report.marketing_strategy["contentSeries"]
+        self.assertEqual(saved_series[0]["brandDisplayName"], request.service_name)
 
     def test_search_metric_keeps_request_ownership_fields_and_audit_evidence_id(self):
         session = FakeSession()
@@ -613,6 +728,36 @@ class ReportCitationServiceTest(unittest.TestCase):
         self.assertEqual(result["market_analysis"], [501, 502])
         self.assertEqual(result["target_customer_analysis"], [])
         self.assertNotIn("not_a_section", result)
+
+    def test_content_post_evidence_ids_are_sanitized_by_existing_policy(self):
+        service = ReportCitationService(repository=FakeCitationRepository([
+            SimpleNamespace(id=501, retrieval_run_id=10),
+            SimpleNamespace(id=502, retrieval_run_id=10),
+            SimpleNamespace(id=601, retrieval_run_id=99),
+        ]))
+        report_payload = {
+            "marketing_strategy": {
+                "contentSeries": [make_content_series([
+                    make_content_post(
+                        "post-1",
+                        1,
+                        evidenceIds=[501, 501, 999, 601, 502],
+                    ),
+                ])],
+            },
+        }
+        valid_ids = service.validate_section_evidence_ids(
+            SimpleNamespace(),
+            retrieval_run_id=10,
+            section_evidence_ids={
+                "marketing_strategy": [501, 501, 999, 601, 502],
+            },
+        )
+
+        service.sanitize_report_evidence_ids(report_payload, valid_ids)
+
+        post = report_payload["marketing_strategy"]["contentSeries"][0]["posts"][0]
+        self.assertEqual(post["evidenceIds"], [501, 502])
 
     def test_citation_response_normalizes_metadata_and_deduplicates_source(self):
         evidence_one = SimpleNamespace(

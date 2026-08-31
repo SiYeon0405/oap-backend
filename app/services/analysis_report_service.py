@@ -186,6 +186,11 @@ class AnalysisReportService:
                         evidence_context=evidence_context,
                     )
                 )
+                marketing_strategy = report_payload.get("marketing_strategy")
+                if isinstance(marketing_strategy, dict):
+                    for content_series in marketing_strategy.get("contentSeries") or []:
+                        if isinstance(content_series, dict):
+                            content_series["brandDisplayName"] = analysis_request.service_name
                 headline_metrics = report_payload.pop("headline_metrics", [])
                 valid_section_evidence_ids = (
                     self.report_citation_service.validate_section_evidence_ids(

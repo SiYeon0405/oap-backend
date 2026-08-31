@@ -404,7 +404,42 @@ Google 계정 요청:
   "marketAnalysis": {"title": "시장 분석", "summary": "...", "insights": [], "recommendations": [], "metrics": [], "purchaseFactors": [], "opportunityMatrix": null, "demandTrend": null},
   "competitorAnalysis": {"title": "경쟁 분석", "summary": "...", "insights": [], "recommendations": [], "competitorCount": null, "analyzedCopyCount": null, "messageCoverage": [], "competitors": []},
   "targetCustomerAnalysis": {"title": "고객 분석", "summary": "...", "insights": [], "recommendations": [], "segments": [], "scoringModelVersion": null},
-  "marketingStrategy": {"title": "마케팅 전략", "summary": "...", "insights": [], "recommendations": [], "executionPhases": [], "currentKpiValue": null, "targetAchievementRate": null, "previousReportDelta": null, "actualCampaignPerformance": null, "recommendationOutcomeGap": null},
+  "marketingStrategy": {
+    "title": "마케팅 전략",
+    "summary": "...",
+    "insights": [],
+    "recommendations": [],
+    "executionPhases": [],
+    "contentSeries": [
+      {
+        "id": "series_threads_01",
+        "platform": "threads",
+        "platformLabel": "Threads",
+        "brandDisplayName": "OAP",
+        "seriesTitle": "초기 사업자를 위한 3일 콘텐츠",
+        "cadence": "하루 1회",
+        "posts": [
+          {
+            "id": "post_threads_01_day_1",
+            "sequence": 1,
+            "dayLabel": "1일차",
+            "objective": "문제 공감",
+            "hook": "마케팅 방향을 정했는데도 첫 문장이 막힐 때가 있습니다.",
+            "body": "고객이 실제로 사용하는 표현에서 첫 문장을 시작해보세요.",
+            "cta": "고객이 자주 하는 질문 한 가지를 적어보세요.",
+            "hashtags": [],
+            "evidenceIds": [101],
+            "caution": "실제 고객 발언으로 단정하지 않습니다."
+          }
+        ]
+      }
+    ],
+    "currentKpiValue": null,
+    "targetAchievementRate": null,
+    "previousReportDelta": null,
+    "actualCampaignPerformance": null,
+    "recommendationOutcomeGap": null
+  },
   "platformRecommendation": {"title": "플랫폼 추천", "summary": "...", "insights": [], "recommendations": [], "rankedPlatforms": [], "currentKpiValue": null, "targetAchievementRate": null, "previousReportDelta": null, "actualCampaignPerformance": null, "recommendationOutcomeGap": null},
   "reportMeta": {"schemaVersion": "3.0", "requestId": 123, "generatedAt": "2026-08-01T00:00:00Z", "dataAsOf": null, "overallConfidence": null, "evidenceCount": 0, "analysisLocale": "ko-KR"},
   "headlineMetrics": [
@@ -420,6 +455,38 @@ Google 계정 요청:
 `score`는 `0~100`, confidence/rate는 `0~1`, 근거 없는 값은 `null`이다.
 Legacy 데이터는 기존 텍스트를 유지하고 `schemaVersion="2.1-legacy"`, 신규 배열 `[]`, 신규 단일값 `null`로 반환한다.
 전체 시각화 계약은 `docs/OAP_report_visual_metrics_backend_contract.md`를 따른다.
+
+#### `marketingStrategy.contentSeries`
+
+`contentSeries`는 선택 필드인 `Array`이며, 실제 SNS 발행 결과가 아니라 활용 가능한 연속 콘텐츠 초안이다. 기존 리포트 또는 생성 결과가 없으면 빈 배열로 응답하며, 게시물 개수를 정확히 3개로 보장하지 않는다. 기존 `summary`, `insights`, `recommendations`, `executionPhases` 계약은 유지한다.
+
+| ContentSeries 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `id` | String | Yes | 시리즈 식별자 |
+| `platform` | String | Yes | 플랫폼 코드 |
+| `platformLabel` | String | Yes | 표시용 플랫폼명 |
+| `brandDisplayName` | String | Yes | 사용자가 입력한 서비스명 |
+| `seriesTitle` | String | Yes | 시리즈 제목 |
+| `cadence` | String | Yes | 게시 주기 설명 |
+| `posts` | Array | Yes | 게시물 초안 배열. 빈 배열 가능 |
+
+| ContentPost 필드 | 타입 | 필수 | 설명 |
+|---|---|---|---|
+| `id` | String | Yes | 게시물 식별자 |
+| `sequence` | Integer | Yes | 시리즈 내 순서 |
+| `dayLabel` | String | Yes | 표시용 일정명 |
+| `objective` | String | Yes | 게시 목적 |
+| `hook` | String | Yes | 도입 문구 |
+| `body` | String | Yes | 본문 초안 |
+| `cta` | String 또는 null | No | 행동 유도 문구 |
+| `hashtags` | String Array | No | 해시태그. 빈 배열 가능 |
+| `evidenceIds` | Integer Array | No | 현재 리포트에 유효한 실제 근거 ID. 근거가 없으면 빈 배열 |
+| `caution` | String 또는 null | No | 게시 시 주의사항 |
+
+- `posts`는 `sequence` 오름차순으로 응답한다.
+- `profileName` 필드는 사용하지 않고 `brandDisplayName`을 표시한다.
+- 프론트는 `contentSeries`가 비어 있으면 피드 영역을 숨기거나 빈 상태로 처리한다.
+- `cta`, `caution`은 `null`일 수 있고 `hashtags`, `evidenceIds`, `posts`는 빈 배열일 수 있다.
 
 ### GET /api/v1/analysis-requests/{requestId}/report/citations
 
