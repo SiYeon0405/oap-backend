@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import dotenv_values
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -56,6 +56,8 @@ class Settings(BaseSettings):
     naver_ad_api_key: str | None = None
     naver_ad_secret_key: str | None = None
     naver_ad_customer_id: str | None = None
+    toss_secret_key: SecretStr | None = None
+    toss_billing_encryption_key: SecretStr | None = None
     admin_jwt_secret: str | None = None
     admin_jwt_issuer: str | None = None
     admin_jwt_audience: str | None = None

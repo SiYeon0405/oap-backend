@@ -9,6 +9,7 @@ from app.api.analytics import router as analytics_router
 from app.api.admin_auth import router as admin_auth_router
 from app.api.admin_read import router as admin_read_router
 from app.api.auth import router as auth_router
+from app.api.billing import router as billing_router
 from app.api.health import router as health_router
 from app.api.interview import router as interview_router
 from app.core.config import get_app_env, get_cors_allowed_origins, get_settings
@@ -41,6 +42,7 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(auth_router)
+app.include_router(billing_router)
 app.include_router(analytics_router)
 app.include_router(admin_auth_router)
 app.include_router(admin_read_router)
