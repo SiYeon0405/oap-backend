@@ -1019,3 +1019,144 @@ python -m app.cli.refresh_admin_analytics
 - 로컬 pgvector 부재로 전체 fresh migration은 완료하지 못했다. 신규 P0 revision은
   parent revision baseline에서 검증했다.
 - 운영 적용, 배포, commit/push는 이 문서 갱신 단계에서 수행하지 않았다.
+
+## 11. Billing 카드 등록 API
+
+### 11.1 v2.1 변경 이력
+
+| 작성일 | 버전 | 변경 내용 |
+|---|---|---|
+| 2026-09-02 | v2.1 | 토스 카드 등록 세션 시작 및 카드 등록 완료 API 2개 계약 추가 |
+
+### 11.2 기능 범위
+
+- 현재 구현 범위는 카드 등록 세션 시작과 카드 등록 완료이다.
+- 토스 빌링키는 백엔드가 발급받아 암호화 저장한다. `billingKey`와 암호문은 프론트 응답에 포함하지 않는다.
+- 현재 단계에서는 카드 등록 즉시 결제하지 않는다.
+- 월 정기결제, 무료체험 생성, 결제 배치, 실패 재시도, 구독 취소 API는 미구현이다.
+
+### 11.3 공통 인증·보안 계약
+
+- 기존 사용자 인증 방식인 `access_token` HttpOnly Cookie가 필요하다.
+- 요청의 `userId`는 신뢰하거나 사용하지 않고, 서버가 인증된 사용자의 ID를 사용한다.
+- 성공 응답과 Billing Controller가 변환한 오류 응답에는 `Cache-Control: no-store`, `Pragma: no-cache`가 포함된다.
+- `authKey`, `customerKey`, `billingKey`와 Provider 원본 오류는 로그나 오류 응답에 포함하지 않는다.
+- `TOSS_SECRET_KEY`와 `TOSS_BILLING_ENCRYPTION_KEY`는 서버 전용이다.
+
+### 11.4 POST /api/v1/billing/registration/start
+
+- 설명: 인증된 사용자의 카드 등록 세션을 시작하고 토스 카드 등록에 사용할 `customerKey`와 만료 시각을 발급한다.
+- 인증: `access_token` HttpOnly Cookie 필요
+- Request Body: 없음
+- 성공: `201 Created`
+- 성공 응답 Schema: `BillingRegistrationStartResponse`
+- 쿠키 변경: 없음
+
+응답 필드:
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---:|---|
+| `customerKey` | string | O | 2~50자, 영문 대·소문자, 숫자, `-`, `_`, `=`, `.`, `@`만 허용 |
+| `expiresAt` | string(datetime) | O | timezone-aware ISO 8601 datetime, 발급 시점부터 15분 후 |
+
+```json
+{
+  "customerKey": "00000000-0000-4000-8000-000000000000",
+  "expiresAt": "2026-09-02T11:15:00Z"
+}
+```
+
+확인된 오류:
+
+| 상태 | code | message |
+|---|---|---|
+| `403` | `BILLING_USER_UNAVAILABLE` | `Billing is unavailable for this user` |
+| `500` | `BILLING_INTERNAL_ERROR` | `Billing request could not be processed` |
+| `503` | `BILLING_TEMPORARILY_UNAVAILABLE` | `Billing is temporarily unavailable` |
+
+### 11.5 POST /api/v1/billing/registration/complete
+
+- 설명: 토스 인증 결과를 사용해 빌링키를 발급받고 암호화 저장하여 카드 등록을 완료한다.
+- 인증: `access_token` HttpOnly Cookie 필요
+- 요청 Schema: `BillingRegistrationCompleteRequest`
+- 성공: `200 OK`
+- 성공 응답 Schema: `BillingRegistrationCompleteResponse`
+- 쿠키 변경: 없음
+
+요청 필드:
+
+| 필드 | 타입 | 필수 | 제약 |
+|---|---|---:|---|
+| `authKey` | string | O | 1~300자, 빈 문자열·공백 문자열·앞뒤 공백 불가 |
+| `customerKey` | string | O | 2~50자, 영문 대·소문자, 숫자, `-`, `_`, `=`, `.`, `@`만 허용 |
+
+요청값은 strip하거나 변경하지 않는다. 앞뒤 공백이 있는 `authKey`와 허용 문자 밖의 공백이 있는 `customerKey`는 `422` 요청 검증 실패로 거부한다.
+
+```json
+{
+  "authKey": "TEST_AUTH_VALUE",
+  "customerKey": "00000000-0000-4000-8000-000000000000"
+}
+```
+
+응답 필드:
+
+| 필드 | 타입 | 필수 | 제약·설명 |
+|---|---|---:|---|
+| `billingMethodId` | integer | O | 0보다 큰 정수 |
+| `cardIssuerCode` | string 또는 null | X | 최대 10자 |
+| `cardNumberMasked` | string 또는 null | X | 최대 20자, 마스킹된 카드 번호 |
+| `authenticatedAt` | string(datetime) | O | timezone-aware ISO 8601 datetime |
+| `cleanupRequired` | boolean | O | 기존 빌링키 정리가 추가로 필요하면 `true`; 이 값이 `true`여도 새 카드 등록 자체는 `200 OK` 성공 |
+
+```json
+{
+  "billingMethodId": 41,
+  "cardIssuerCode": "TEST",
+  "cardNumberMasked": "1234****5678",
+  "authenticatedAt": "2026-09-02T12:00:00Z",
+  "cleanupRequired": false
+}
+```
+
+완료 응답에는 `billingKey`, `billingKeyEncrypted`, `authKey`, `customerKey`, `userId`가 포함되지 않는다.
+
+확인된 오류:
+
+| 상태 | code | message |
+|---|---|---|
+| `400` | `BILLING_REGISTRATION_INVALID` | `Billing registration is invalid` |
+| `403` | `BILLING_USER_UNAVAILABLE` | `Billing is unavailable for this user` |
+| `409` | `BILLING_REGISTRATION_EXPIRED_OR_USED` | `Billing registration is expired or already used` |
+| `500` | `BILLING_INTERNAL_ERROR` | `Billing request could not be processed` |
+| `502` | `BILLING_PROVIDER_ERROR` | `Billing provider request failed` |
+| `503` | `BILLING_TEMPORARILY_UNAVAILABLE` | `Billing is temporarily unavailable` |
+| `503` | `BILLING_REQUIRES_ATTENTION` | `Billing request requires attention` |
+
+Billing Controller의 고정 오류 응답은 다음 구조를 사용한다.
+
+```json
+{
+  "detail": {
+    "code": "BILLING_PROVIDER_ERROR",
+    "message": "Billing provider request failed"
+  }
+}
+```
+
+- 인증 Cookie가 없거나 유효하지 않으면 기존 인증 구조의 FastAPI `401` 응답이다.
+- `registration/complete`의 요청 Body가 Schema 제약을 통과하지 못하면 FastAPI/Pydantic 기본 `422` 검증 오류 응답이다. `registration/start`에는 요청 Body가 없다.
+- 원본 DB, Toss 또는 Fernet 오류 메시지는 노출하지 않는다.
+
+### 11.6 프론트 연동 흐름
+
+1. 인증된 프론트가 `POST /api/v1/billing/registration/start`를 호출한다.
+2. 응답의 `customerKey`를 보관한다.
+3. 프론트가 토스 카드 등록 인증창을 호출한다.
+4. 토스 성공 redirect에서 `authKey`와 `customerKey`를 수신한다.
+5. 프론트가 `POST /api/v1/billing/registration/complete`를 호출한다.
+6. 백엔드가 토스에 빌링키 발급을 요청한다.
+7. 백엔드가 `billingKey`를 암호화 저장한다.
+8. 프론트에는 마스킹 카드 정보와 `cleanupRequired`만 반환한다.
+
+현재 프론트 `successUrl`과 `failUrl`은 미확정이다.
